@@ -49,13 +49,14 @@ public class PublicController {
         this.settings = settings;
     }
 
-    public record BusinessView(String name, String zone, LocalDateTime now, Map<DayOfWeek, List<TimeRange>> hours) {
+    public record BusinessView(String name, String address, String zone, LocalDateTime now,
+                               Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes) {
     }
 
     @GetMapping("/business")
     BusinessView business() {
-        return new BusinessView(settings.businessName(), settings.zone().getId(), scheduling.now(),
-                calendars.weeklyHours());
+        return new BusinessView(settings.businessName(), settings.businessAddress(), settings.zone().getId(),
+                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes());
     }
 
     @GetMapping("/services")
