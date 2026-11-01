@@ -205,6 +205,15 @@ class ApiTest {
     }
 
     @Test
+    void servesTheBookingPage() throws Exception {
+        mvc.perform(get("/index.html")).andExpect(status().isOk());
+        mvc.perform(get("/api/business"))
+                .andExpect(jsonPath("$.name").value("Northside Barbers"))
+                .andExpect(jsonPath("$.hours.MONDAY", hasSize(2)))
+                .andExpect(jsonPath("$.minNoticeMinutes").value(120));
+    }
+
+    @Test
     void publicBookingViewHidesThePhone() throws Exception {
         book("2026-11-03T10:00");
         mvc.perform(get("/api/bookings/1"))

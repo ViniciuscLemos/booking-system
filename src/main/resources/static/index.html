@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book a time</title>
+  <meta name="description" content="Pick a service, a day and a time.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1 id="business-name">&nbsp;</h1>
+      <p class="address" id="business-address"></p>
+      <p class="today" id="today-hours"></p>
+    </div>
+  </header>
+
+  <main class="wrap" id="booking">
+    <section class="step" aria-labelledby="h-service">
+      <h2 id="h-service"><span class="n">1</span> Service</h2>
+      <ul class="services" id="services" role="radiogroup" aria-labelledby="h-service">
+        <li class="loading">Loading…</li>
+      </ul>
+    </section>
+
+    <section class="step" id="step-day" aria-labelledby="h-day" hidden>
+      <h2 id="h-day"><span class="n">2</span> Day</h2>
+      <div class="days-wrap">
+        <ol class="days" id="days"></ol>
+      </div>
+    </section>
+
+    <section class="step" id="step-time" aria-labelledby="h-time" hidden>
+      <h2 id="h-time"><span class="n">3</span> Time <small id="time-day"></small></h2>
+      <p class="error notice" id="time-notice" role="alert" hidden></p>
+      <div id="times"></div>
+    </section>
+
+    <section class="step" id="step-details" aria-labelledby="h-details" hidden>
+      <h2 id="h-details"><span class="n">4</span> Your details</h2>
+      <form id="details" novalidate>
+        <p class="summary" id="summary"></p>
+        <div class="fields">
+          <label>
+            Name
+            <input name="clientName" autocomplete="name" maxlength="80" required>
+          </label>
+          <label>
+            Phone
+            <input name="clientPhone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(11) 91234-5678" required>
+          </label>
+        </div>
+        <p class="error" id="form-error" role="alert" hidden></p>
+        <button type="submit" class="confirm">Confirm booking</button>
+      </form>
+    </section>
+  </main>
+
+  <main class="wrap done" id="done" hidden tabindex="-1">
+    <p class="kicker">Booked</p>
+    <h2 id="done-title"></h2>
+    <dl class="receipt" id="receipt"></dl>
+    <p class="muted">If you can't make it, just give us a call.</p>
+    <button type="button" class="link" id="again">Book another time</button>
+  </main>
+
+  <footer class="wrap foot">
+    <p id="zone-note"></p>
+  </footer>
+</body>
+</html>
