@@ -4,9 +4,26 @@
 
 Online booking for small businesses like a barbershop, a clinic or a nail salon: the business sets up its services and opening hours, and clients pick a free time.
 
-Building a form that saves a date is easy. The hard part is the rules: two clients can't get the same time, a 30 minute haircut can't start at 11:45 if lunch is at 12:00, the barber needs 10 minutes to clean up between clients, nobody can book for 5 minutes from now. That's the part I wanted to get right first, before any screens.
+Building a form that saves a date is easy. The hard part is the rules: two clients can't get the same time, a 30 minute haircut can't start at 11:45 if lunch is at 12:00, the barber needs 10 minutes to clean up between clients, nobody can book for 5 minutes from now. That's the part I wanted to get right first, then the API and the page on top of it.
 
-Work in progress. Right now it's the scheduling rules with tests; the API, database and login come next.
+![The booking page: services with price and duration, two weeks of days with how many times are free, the times of the chosen day and the client's details](docs/booking-desktop.png)
+
+Work in progress. What works today: the rules, a REST API on PostgreSQL and the client's booking page. Login, cancelling and more than one professional come next.
+
+## The booking page
+
+Pick a service, a day, a time, write your name and phone, done. Each day shows how many times are still free, so a client doesn't click through full days. Times are split into morning, afternoon and evening.
+
+If someone else takes the same time while the page is open, the booking is refused, the list of times is reloaded and the page says what happened, keeping the name and phone already typed:
+
+<img src="docs/booking-conflict.png" alt="A notice saying 18:00 is gone because someone already booked it, above the updated list of times" width="640">
+
+It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no build step. Follows the system's dark mode and works on a phone, where the days become a strip you swipe sideways.
+
+<p>
+  <img src="docs/booking-mobile.png" alt="The booking page on a phone" width="260">
+  <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
+</p>
 
 ## The rules
 
@@ -33,25 +50,82 @@ Some decisions:
 - A specific date can replace its weekday, like a Saturday before a holiday that only opens in the morning. With no ranges, that date is closed.
 - The slot grid counts from the start of each range, so after lunch the first slot is 13:00 even if the morning started at 08:45.
 
-## Free slots
-
 `Availability.freeSlots` walks the grid of each range of the day and keeps the times that pass `BookingRules.check`. Same check, not a second copy of the rules, so a time that shows up as free is always accepted when the client books it (there's a test that books every offered slot to make sure).
 
-`Availability.nextFree` finds the first free time from now on, skipping closed and full days.
+## Two clients, same time, same second
+
+The rules check the calendar and then the booking is saved. Between those two steps another request can sneak in and book the same time, and both would pass the check.
+
+So the database has the last word. The `booking` table has an exclusion constraint:
+
+```sql
+CONSTRAINT booking_no_overlap EXCLUDE USING gist (
+    tsrange(starts, blocked_until, '[)') WITH &&
+) WHERE (status = 'CONFIRMED')
+```
+
+Postgres refuses any confirmed booking whose time range overlaps another one, buffer included. The API turns that error into the same 409 the rules give. There's a test that fires 8 bookings for the same time at once: one gets in, seven get `CLASHES_WITH_BOOKING`, and the table ends up with one row. Cancelled bookings are left out of the constraint, so cancelling frees the time.
+
+A booking also copies its end and buffer when it's saved, so making a service longer later doesn't move the appointments that already exist.
+
+## API
+
+Client side:
+
+| | |
+|---|---|
+| `GET /api/business` | name, address, opening hours, current time |
+| `GET /api/services` | active services |
+| `GET /api/availability?serviceId=1&date=2026-11-03` | free times of a day |
+| `GET /api/availability/days?serviceId=1&from=2026-11-02&count=14` | how each day looks, in one go |
+| `POST /api/bookings` | `{"serviceId":1,"start":"2026-11-03T10:00","clientName":"Ana","clientPhone":"(11) 98888-7777"}` |
+| `GET /api/bookings/{id}` | the booking, without the phone |
+
+A refused booking answers 409 with the reasons:
+
+```json
+{
+  "error": "This time can't be booked",
+  "problems": [{ "code": "CROSSES_BREAK", "message": "The appointment would run into a break." }]
+}
+```
+
+Business side, under `/api/admin`: create and edit services, set the week's hours, special dates, time off, and the day's bookings. There's no login yet, so this part isn't meant to be online as it is.
+
+`/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
 ## Running it
 
-Java 21 and Maven.
+Java 21 and Maven. The tests start their own PostgreSQL (embedded, downloaded by Maven the first time), so there's nothing to install or Docker to run:
 
 ```bash
 mvn test
 ```
 
+To click around the page with a barbershop already set up and some times taken, on the same embedded Postgres:
+
+```bash
+mvn test-compile spring-boot:test-run -Dspring-boot.test-run.main-class=io.github.viniciusclemos.booking.DemoApplication
+```
+
+Then open http://localhost:8080. Everything is gone when it stops.
+
+Against a real database, set `DB_URL`, `DB_USER` and `DB_PASSWORD` and run `mvn spring-boot:run`. Flyway creates the tables. The business's rules (timezone, notice, how far ahead, slot grid) are in `application.properties`.
+
+## How the code is split
+
+```
+domain/       TimeRange, Interval, ServiceOffering, Booking, WeeklySchedule, BookingPolicy, Calendar
+scheduling/   BookingRules, Availability (pure Java, no Spring), SchedulingService
+store/        SQL with JdbcClient
+api/          controllers and error responses
+```
+
+The rules don't know about Spring or the database, which is why most of the tests run in milliseconds.
+
 ## What's next
 
-- REST API: services, opening hours, `GET /availability?service=..&date=..`, booking and cancelling
-- PostgreSQL, with an exclusion constraint so two overlapping bookings can't both be saved even if two requests arrive at the same moment
-- login for the business and for clients
-- cancellation rules (up to X hours before)
+- login for the business (and protecting `/api/admin`)
+- cancelling, with a deadline (up to X hours before)
 - several professionals, each with their own calendar
-- a simple web page to book
+- the business's screen: the day's agenda, services and hours
