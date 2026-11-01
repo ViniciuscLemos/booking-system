@@ -1,0 +1,93 @@
+package io.github.viniciusclemos.booking.scheduling;
+
+import io.github.viniciusclemos.booking.config.BookingSettings;
+import io.github.viniciusclemos.booking.domain.Booking;
+import io.github.viniciusclemos.booking.domain.Calendar;
+import io.github.viniciusclemos.booking.store.BookingRow;
+import io.github.viniciusclemos.booking.store.CalendarStore;
+import io.github.viniciusclemos.booking.store.ServiceRow;
+import io.github.viniciusclemos.booking.store.ServiceStore;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class SchedulingService {
+
+    private final ServiceStore services;
+    private final CalendarStore calendars;
+    private final BookingSettings settings;
+    private final Clock clock;
+
+    public SchedulingService(ServiceStore services, CalendarStore calendars, BookingSettings settings, Clock clock) {
+        this.services = services;
+        this.calendars = calendars;
+        this.settings = settings;
+        this.clock = clock;
+    }
+
+    public LocalDateTime now() {
+        return LocalDateTime.now(clock).withSecond(0).withNano(0);
+    }
+
+    public List<LocalTime> slots(long serviceId, LocalDate date) {
+        ServiceRow service = activeService(serviceId);
+        Calendar calendar = calendars.load(date, date, settings.policy());
+        return Availability.freeSlots(calendar, service.toOffering(), date, now());
+    }
+
+    public record DaySummary(LocalDate date, boolean open, int free, LocalTime first) {
+    }
+
+    /** How each day looks for this service, loading the whole range at once. */
+    public List<DaySummary> days(long serviceId, LocalDate from, int count) {
+        ServiceRow service = activeService(serviceId);
+        LocalDate to = from.plusDays(count - 1);
+        Calendar calendar = calendars.load(from, to, settings.policy());
+        LocalDateTime now = now();
+
+        List<DaySummary> days = new ArrayList<>();
+        for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
+            boolean open = !calendar.schedule().rangesOn(day).isEmpty();
+            List<LocalTime> free = Availability.freeSlots(calendar, service.toOffering(), day, now);
+            days.add(new DaySummary(day, open, free.size(), free.isEmpty() ? null : free.get(0)));
+        }
+        return days;
+    }
+
+    public BookingRow book(long serviceId, LocalDateTime start, String clientName, String clientPhone) {
+        ServiceRow service = activeService(serviceId);
+        Booking wanted = new Booking(service.toOffering(), start);
+
+        Calendar calendar = calendars.load(start.toLocalDate(), start.toLocalDate(), settings.policy());
+        List<Violation> problems = BookingRules.check(calendar, wanted.service(), start, now());
+        if (!problems.isEmpty()) throw new BookingRefused(problems);
+
+        try {
+            long id = calendars.insertBooking(serviceId, clientName, clientPhone, start,
+                    wanted.appointment().end(), wanted.blocked().end());
+            return booking(id);
+        } catch (DataIntegrityViolationException e) {
+            // someone took the same time between the check above and the insert
+            if (String.valueOf(e.getMostSpecificCause().getMessage()).contains("booking_no_overlap")) {
+                throw new BookingRefused(List.of(Violation.CLASHES_WITH_BOOKING));
+            }
+            throw e;
+        }
+    }
+
+    public BookingRow booking(long id) {
+        return calendars.findBooking(id).orElseThrow(() -> new NotFound("Booking not found"));
+    }
+
+    private ServiceRow activeService(long id) {
+        return services.findById(id).filter(ServiceRow::active)
+                .orElseThrow(() -> new NotFound("Service not found"));
+    }
+}
