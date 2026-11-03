@@ -48,6 +48,13 @@ The confirmation shows a link the client keeps. It opens a page with the booking
   <img src="docs/staff-mobile.png" alt="The same page on a phone" width="220">
 </p>
 
+The other two tabs are for setting things up: services (name, duration, the clean-up time after, price, and whether clients can see it) and the week's opening hours, where a day can have more than one stretch and the gap between them is the break. Two stretches that overlap are refused.
+
+<p>
+  <img src="docs/staff-services.png" alt="Editing a service: name, description, duration, clean-up time, price and whether it shows on the booking page" width="420">
+  <img src="docs/staff-hours.png" alt="The week's opening hours, each day with its stretches" width="300">
+</p>
+
 How the login works:
 
 - E-mail and password, checked against a bcrypt hash. The answer is the same for an unknown e-mail and a wrong password, so the login can't be used to find out who works there.
@@ -161,4 +168,4 @@ The rules don't know about Spring or the database, which is why most of the test
 ## What's next
 
 - several professionals, each with their own calendar
-- editing services and hours from the staff page (today it's only through the API)
+- special dates and time off from the staff page (today they're only in the API)
