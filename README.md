@@ -8,7 +8,7 @@ Building a form that saves a date is easy. The hard part is the rules: two clien
 
 ![The booking page: services with price and duration, two weeks of days with how many times are free, the times of the chosen day and the client's details](docs/booking-desktop.png)
 
-Work in progress. What works today: the rules, a REST API on PostgreSQL and the client's booking page. Login, cancelling and more than one professional come next.
+Work in progress. What works today: the rules, a REST API on PostgreSQL, the client's booking page and a staff page with login. Cancelling and more than one professional come next.
 
 ## The booking page
 
@@ -24,6 +24,25 @@ It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no b
   <img src="docs/booking-mobile.png" alt="The booking page on a phone" width="260">
   <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
 </p>
+
+## The staff side
+
+`/admin.html` is where the barber logs in and sees the day: each booking with the client's phone (a tap calls it on the phone), and the free time between them, so it's easy to see where a walk-in fits.
+
+<p>
+  <img src="docs/staff-agenda.png" alt="The staff page: the day's bookings with time, client, service and phone, and the free gaps between them" width="560">
+  <img src="docs/staff-mobile.png" alt="The same page on a phone" width="220">
+</p>
+
+How the login works:
+
+- E-mail and password, checked against a bcrypt hash. The answer is the same for an unknown e-mail and a wrong password, so the login can't be used to find out who works there.
+- After logging in, the browser gets a session cookie marked `HttpOnly` (a script on the page can't read it) and `SameSite=Strict`. The session id changes at login, so an id planted before doesn't work after.
+- Since the browser sends that cookie by itself, every change also needs a CSRF token: it comes in the `XSRF-TOKEN` cookie and the page sends it back in a header. Another site can make the browser send the cookie, but it can't read the token. The client's booking doesn't need it, there's no session there to abuse.
+- 5 wrong passwords for the same e-mail lock that e-mail for 15 minutes. Other people can still log in.
+- There's no default password. The first login is created from `OWNER_EMAIL` and `OWNER_PASSWORD` (at least 10 characters) when the staff table is empty; without them the app starts with no admin and says so in the log.
+
+I went with a session instead of a JWT because the page and the API are on the same site: a cookie the page can't touch is safer than a token stored in JavaScript, and logging out actually ends the session on the server.
 
 ## The rules
 
@@ -90,7 +109,7 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Business side, under `/api/admin`: create and edit services, set the week's hours, special dates, time off, and the day's bookings. There's no login yet, so this part isn't meant to be online as it is.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, and the day's bookings. Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
@@ -108,9 +127,9 @@ To click around the page with a barbershop already set up and some times taken, 
 mvn test-compile spring-boot:test-run -Dspring-boot.test-run.main-class=io.github.viniciusclemos.booking.DemoApplication
 ```
 
-Then open http://localhost:8080. Everything is gone when it stops.
+Then open http://localhost:8080. The staff page is http://localhost:8080/admin.html, with `rui@northside.test` / `northside-demo`. Everything is gone when it stops.
 
-Against a real database, set `DB_URL`, `DB_USER` and `DB_PASSWORD` and run `mvn spring-boot:run`. Flyway creates the tables. The business's rules (timezone, notice, how far ahead, slot grid) are in `application.properties`.
+Against a real database, set `DB_URL`, `DB_USER`, `DB_PASSWORD`, `OWNER_EMAIL` and `OWNER_PASSWORD` and run `mvn spring-boot:run`. Flyway creates the tables. The business's rules (timezone, notice, how far ahead, slot grid) are in `application.properties`.
 
 ## How the code is split
 
@@ -119,13 +138,13 @@ domain/       TimeRange, Interval, ServiceOffering, Booking, WeeklySchedule, Boo
 scheduling/   BookingRules, Availability (pure Java, no Spring), SchedulingService
 store/        SQL with JdbcClient
 api/          controllers and error responses
+auth/         staff login, session and CSRF setup, the lock after wrong passwords
 ```
 
 The rules don't know about Spring or the database, which is why most of the tests run in milliseconds.
 
 ## What's next
 
-- login for the business (and protecting `/api/admin`)
-- cancelling, with a deadline (up to X hours before)
+- cancelling, with a deadline (up to X hours before), from a link the client gets
 - several professionals, each with their own calendar
-- the business's screen: the day's agenda, services and hours
+- editing services and hours from the staff page (today it's only through the API)
