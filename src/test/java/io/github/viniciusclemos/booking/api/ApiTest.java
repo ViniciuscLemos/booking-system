@@ -28,6 +28,8 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -63,9 +65,13 @@ class ApiTest {
         haircut = 1;
     }
 
+    // the admin calls go as a logged in staff member with the CSRF token; the login itself is tested in AuthTest
     ResultActions send(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request, String json)
             throws Exception {
-        return mvc.perform(request.contentType(MediaType.APPLICATION_JSON).content(json));
+        return mvc.perform(request.contentType(MediaType.APPLICATION_JSON).content(json).with(r -> {
+            if (!r.getRequestURI().startsWith("/api/admin")) return r;
+            return csrf().postProcessRequest(user("owner@northside.test").postProcessRequest(r));
+        }));
     }
 
     ResultActions book(String start) throws Exception {
