@@ -29,6 +29,9 @@
 
 * { box-sizing: border-box; }
 
+/* hidden wins over any display set below */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--paper);
@@ -191,4 +194,47 @@ input[aria-invalid="true"] { border-color: var(--red); }
   .top h1 { font-size: 2rem; }
   .fields { grid-template-columns: 1fr; }
   .confirm { width: 100%; }
+}
+
+/* ---------- staff page ---------- */
+
+.top-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.staff .kicker { margin-bottom: 2px; }
+.who { display: flex; gap: 14px; align-items: baseline; color: var(--muted); padding-bottom: 6px; white-space: nowrap; }
+
+.login { max-width: 360px; margin: 36px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.login h2 { font: 600 1.4rem var(--serif); margin: 0 0 4px; }
+.login .error { margin: 0; }
+.login .confirm { margin-top: 4px; align-self: flex-start; }
+
+.day-nav { display: flex; align-items: center; gap: 10px; padding: 28px 0 4px; flex-wrap: wrap; }
+.day-nav h2 { font: 600 1.4rem var(--serif); margin: 0; min-width: 0; }
+.arrow {
+  width: 34px; height: 34px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card); cursor: pointer; font-size: 1.2rem; line-height: 1;
+}
+.arrow:hover { border-color: var(--ink); }
+.agenda-summary { color: var(--muted); margin: 0 0 18px; }
+
+.agenda { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.agenda li { display: grid; grid-template-columns: 70px 1fr auto; gap: 16px; align-items: baseline; padding: 13px 4px; border-bottom: 1px solid var(--line); }
+.agenda .when { font: 600 1.05rem var(--serif); font-variant-numeric: tabular-nums; }
+.agenda .when small { display: block; font: 400 0.8rem var(--sans); color: var(--muted); }
+.who-what { display: flex; flex-direction: column; }
+.who-what span { color: var(--muted); font-size: 0.92rem; }
+.phone { color: var(--green); text-decoration: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.phone:hover { text-decoration: underline; }
+.agenda .free-row { color: var(--muted); padding: 8px 4px; background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--card) 6px 12px); }
+.agenda .free-row .when { font: 400 0.9rem var(--sans); }
+.agenda .free-row span:last-child { grid-column: 2 / span 2; font-size: 0.9rem; }
+.agenda .break { color: var(--muted); font-size: 0.85rem; padding: 10px 4px; }
+.agenda .break span { grid-column: 2 / span 2; }
+.agenda .empty { display: block; color: var(--muted); }
+
+.foot a { color: inherit; }
+
+@media (max-width: 560px) {
+  .agenda li { grid-template-columns: 58px 1fr; row-gap: 4px; }
+  .phone { grid-column: 2; }
 }

@@ -11,21 +11,34 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Random;
+import java.util.stream.Stream;
 
 /**
  * Runs the app on an embedded Postgres with a barbershop already set up, so you can
  * click around without installing anything: {@code mvn spring-boot:test-run}.
+ * The staff page (/admin.html) logs in with rui@northside.test / northside-demo.
  * Everything is gone when it stops.
  */
 public class DemoApplication {
 
     public static void main(String[] args) {
-        SpringApplication.from(BookingApplication::main).with(Demo.class).run(args);
+        // a staff login for the demo; a real install sets OWNER_EMAIL and OWNER_PASSWORD
+        String[] withOwner = Stream.concat(Arrays.stream(args), Stream.of(
+                "--booking.owner.name=Rui", "--booking.owner.email=rui@northside.test",
+                "--booking.owner.password=northside-demo")).toArray(String[]::new);
+        SpringApplication.from(BookingApplication::main).with(Demo.class).run(withOwner);
     }
 
     @TestConfiguration(proxyBeanMethods = false)
     static class Demo {
+
+        // same order as the services created below
+        static final int[] MINUTES = {30, 20, 50, 25, 60};
+        static final int[] BUFFERS = {10, 5, 10, 5, 15};
+        static final String[] NAMES = {"Lucas Almeida", "Pedro Rocha", "Gabriel Costa", "Mateus Oliveira",
+                "Rafael Souza", "Thiago Martins", "Bruno Ferreira", "Felipe Lima", "Caio Ribeiro", "Diego Santos"};
 
         @Bean
         DataSource dataSource() {
@@ -58,13 +71,19 @@ public class DemoApplication {
                     int lastHour = date.getDayOfWeek() == DayOfWeek.SATURDAY ? 13 : 18;
                     for (int i = 0; i < 6; i++) {
                         int hour = 9 + random.nextInt(lastHour - 9);
-                        if (hour == 12) continue;
                         LocalDateTime start = date.atTime(hour, random.nextBoolean() ? 0 : 30);
+                        int service = 1 + random.nextInt(MINUTES.length);
+                        LocalDateTime end = start.plusMinutes(MINUTES[service - 1]);
+                        LocalDateTime blocked = end.plusMinutes(BUFFERS[service - 1]);
+                        // stays out of lunch and closing time, like a real booking would
+                        if (start.getHour() < 12 && end.isAfter(date.atTime(12, 0))) continue;
+                        if (start.getHour() == 12 || end.isAfter(date.atTime(lastHour + 1, 0))) continue;
                         db.sql("""
                                         INSERT INTO booking (service_id, client_name, client_phone, starts, ends, blocked_until)
-                                        SELECT 1, 'Walk-in', '11900000000', ?, ?, ?
+                                        SELECT ?, ?, ?, ?, ?, ?
                                         WHERE NOT EXISTS (SELECT 1 FROM booking WHERE tsrange(starts, blocked_until) && tsrange(?, ?))""")
-                                .params(start, start.plusMinutes(30), start.plusMinutes(40), start, start.plusMinutes(40))
+                                .params(service, NAMES[random.nextInt(NAMES.length)],
+                                        "119" + (10000000 + random.nextInt(89999999)), start, end, blocked, start, blocked)
                                 .update();
                     }
                 }

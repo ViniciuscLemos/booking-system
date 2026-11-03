@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Staff</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="admin.js" defer></script>
+</head>
+<body class="staff">
+  <header class="top">
+    <div class="wrap top-row">
+      <div>
+        <p class="kicker">Staff</p>
+        <h1 id="business-name">&nbsp;</h1>
+      </div>
+      <div class="who" id="who" hidden>
+        <span id="who-name"></span>
+        <button type="button" class="link" id="logout">Log out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="login-view" hidden>
+    <form class="login" id="login" novalidate>
+      <h2>Log in</h2>
+      <label>
+        E-mail
+        <input name="email" type="email" autocomplete="username" required>
+      </label>
+      <label>
+        Password
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="error" id="login-error" role="alert" hidden></p>
+      <button type="submit" class="confirm">Log in</button>
+    </form>
+  </main>
+
+  <main class="wrap" id="agenda-view" hidden>
+    <div class="day-nav">
+      <button type="button" class="arrow" id="prev" aria-label="Previous day">‹</button>
+      <h2 id="agenda-day"></h2>
+      <button type="button" class="arrow" id="next" aria-label="Next day">›</button>
+      <button type="button" class="link" id="today" hidden>Back to today</button>
+    </div>
+    <p class="agenda-summary" id="agenda-summary"></p>
+    <ol class="agenda" id="agenda"></ol>
+  </main>
+
+  <footer class="wrap foot">
+    <p><a href="./">Booking page</a></p>
+  </footer>
+</body>
+</html>
