@@ -221,10 +221,59 @@ class ApiTest {
 
     @Test
     void publicBookingViewHidesThePhone() throws Exception {
-        book("2026-11-03T10:00");
-        mvc.perform(get("/api/bookings/1"))
+        String token = token(book("2026-11-03T10:00"));
+        mvc.perform(get("/api/bookings/by-token/" + token))
                 .andExpect(jsonPath("$.clientName").value("Ana"))
-                .andExpect(jsonPath("$.clientPhone").doesNotExist());
-        mvc.perform(get("/api/bookings/42")).andExpect(status().isNotFound());
+                .andExpect(jsonPath("$.clientPhone").doesNotExist())
+                .andExpect(jsonPath("$.cancelToken").doesNotExist());
+        // no reading bookings by id, they're easy to guess
+        mvc.perform(get("/api/bookings/1")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/bookings/by-token/not-a-real-token")).andExpect(status().isNotFound());
+    }
+
+    String token(ResultActions created) throws Exception {
+        String json = created.andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return com.jayway.jsonpath.JsonPath.read(json, "$.cancelToken");
+    }
+
+    @Test
+    void theClientCancelsWithTheLinkAndTheTimeIsFreeAgain() throws Exception {
+        ResultActions created = book("2026-11-03T10:00");
+        created.andExpect(jsonPath("$.canCancel").value(true))
+                // 3 hours before
+                .andExpect(jsonPath("$.cancelUntil").value("2026-11-03T07:00:00"));
+        String token = token(created);
+        // only the hash is stored
+        assertThat(db.sql("SELECT cancel_token_hash FROM booking").query(String.class).single())
+                .hasSize(64).isNotEqualTo(token);
+
+        mvc.perform(post("/api/bookings/by-token/" + token + "/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.canCancel").value(false));
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03"))
+                .andExpect(jsonPath("$.slots", hasItem("10:00:00")));
+        // and the same time can be booked again
+        book("2026-11-03T10:00").andExpect(status().isCreated());
+
+        mvc.perform(post("/api/bookings/by-token/" + token + "/cancel"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("This booking was already cancelled."));
+    }
+
+    @Test
+    void tooCloseToTheTimeTheClientHasToCall() throws Exception {
+        // it's Monday 07:00 and the booking is at 09:30: the 3 hours ended at 06:30
+        String token = token(book("2026-11-02T09:30"));
+        mvc.perform(get("/api/bookings/by-token/" + token)).andExpect(jsonPath("$.canCancel").value(false));
+        mvc.perform(post("/api/bookings/by-token/" + token + "/cancel"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("give us a call")));
+
+        // the staff still can, and the agenda shows who cancelled
+        send(post("/api/admin/bookings/1/cancel"), "").andExpect(status().isOk())
+                .andExpect(jsonPath("$.cancelledBy").value("STAFF"));
+        send(get("/api/admin/bookings").param("date", "2026-11-02"), "")
+                .andExpect(jsonPath("$[0].status").value("CANCELLED"));
     }
 }

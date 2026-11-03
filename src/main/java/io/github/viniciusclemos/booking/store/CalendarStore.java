@@ -84,11 +84,36 @@ public class CalendarStore {
 
     public long insertBooking(long serviceId, String clientName, String clientPhone, LocalDateTime starts,
                               LocalDateTime ends, LocalDateTime blockedUntil) {
+        return insertBooking(serviceId, clientName, clientPhone, starts, ends, blockedUntil, null);
+    }
+
+    public long insertBooking(long serviceId, String clientName, String clientPhone, LocalDateTime starts,
+                              LocalDateTime ends, LocalDateTime blockedUntil, String cancelTokenHash) {
         return db.sql("""
-                        INSERT INTO booking (service_id, client_name, client_phone, starts, ends, blocked_until)
-                        VALUES (?, ?, ?, ?, ?, ?) RETURNING id""")
-                .params(serviceId, clientName, clientPhone, starts, ends, blockedUntil)
+                        INSERT INTO booking (service_id, client_name, client_phone, starts, ends, blocked_until,
+                                             cancel_token_hash)
+                        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id""")
+                .params(serviceId, clientName, clientPhone, starts, ends, blockedUntil, cancelTokenHash)
                 .query(Long.class).single();
+    }
+
+    public Optional<BookingRow> findByCancelToken(String tokenHash) {
+        return db.sql(BOOKING_SELECT + " WHERE b.cancel_token_hash = ?").param(tokenHash)
+                .query(BookingRow.class).optional();
+    }
+
+    /** Every booking that starts on the day, cancelled ones too, for the staff's agenda. */
+    public List<BookingRow> bookingsOn(LocalDate day) {
+        return db.sql(BOOKING_SELECT + " WHERE b.starts >= ? AND b.starts < ? ORDER BY b.starts, b.id")
+                .params(day.atStartOfDay(), day.plusDays(1).atStartOfDay()).query(BookingRow.class).list();
+    }
+
+    /** Only touches a confirmed booking, so two cancels at once can't both "win". */
+    public boolean cancel(long id, String by, LocalDateTime at) {
+        return db.sql("""
+                        UPDATE booking SET status = 'CANCELLED', cancelled_at = ?, cancelled_by = ?
+                        WHERE id = ? AND status = 'CONFIRMED'""")
+                .params(at, by, id).update() == 1;
     }
 
     @Transactional
@@ -116,6 +141,6 @@ public class CalendarStore {
 
     private static final String BOOKING_SELECT = """
             SELECT b.id, b.service_id, s.name AS service_name, b.client_name, b.client_phone,
-                   b.starts, b.ends, b.blocked_until, b.status
+                   b.starts, b.ends, b.blocked_until, b.status, b.cancelled_at, b.cancelled_by
             FROM booking b JOIN service s ON s.id = b.service_id""";
 }

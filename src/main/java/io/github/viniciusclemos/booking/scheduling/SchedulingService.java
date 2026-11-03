@@ -61,7 +61,11 @@ public class SchedulingService {
         return days;
     }
 
-    public BookingRow book(long serviceId, LocalDateTime start, String clientName, String clientPhone) {
+    /** A new booking and the token of its cancel link, which exists only in this answer. */
+    public record Booked(BookingRow booking, String cancelToken) {
+    }
+
+    public Booked book(long serviceId, LocalDateTime start, String clientName, String clientPhone) {
         ServiceRow service = activeService(serviceId);
         Booking wanted = new Booking(service.toOffering(), start);
 
@@ -69,10 +73,11 @@ public class SchedulingService {
         List<Violation> problems = BookingRules.check(calendar, wanted.service(), start, now());
         if (!problems.isEmpty()) throw new BookingRefused(problems);
 
+        String token = CancelTokens.newToken();
         try {
             long id = calendars.insertBooking(serviceId, clientName, clientPhone, start,
-                    wanted.appointment().end(), wanted.blocked().end());
-            return booking(id);
+                    wanted.appointment().end(), wanted.blocked().end(), CancelTokens.hash(token));
+            return new Booked(booking(id), token);
         } catch (DataIntegrityViolationException e) {
             // someone took the same time between the check above and the insert
             if (String.valueOf(e.getMostSpecificCause().getMessage()).contains("booking_no_overlap")) {
@@ -84,6 +89,44 @@ public class SchedulingService {
 
     public BookingRow booking(long id) {
         return calendars.findBooking(id).orElseThrow(() -> new NotFound("Booking not found"));
+    }
+
+    /** Until when the client can cancel this booking alone. */
+    public LocalDateTime cancelDeadline(BookingRow booking) {
+        return booking.starts().minus(settings.cancelUntil());
+    }
+
+    public boolean clientCanCancel(BookingRow booking) {
+        return booking.confirmed() && now().isBefore(cancelDeadline(booking));
+    }
+
+    public BookingRow byCancelToken(String token) {
+        return calendars.findByCancelToken(CancelTokens.hash(token))
+                .orElseThrow(() -> new NotFound("This cancel link isn't valid."));
+    }
+
+    public BookingRow cancelByClient(String token) {
+        BookingRow booking = byCancelToken(token);
+        if (!booking.confirmed()) throw new CancelRefused("This booking was already cancelled.");
+        if (!clientCanCancel(booking)) {
+            throw new CancelRefused("It's too close to the time to cancel online. Please give us a call.");
+        }
+        return cancel(booking, "CLIENT");
+    }
+
+    /** The staff can cancel at any time, a client may call at the last minute. */
+    public BookingRow cancelByStaff(long id) {
+        BookingRow booking = booking(id);
+        if (!booking.confirmed()) throw new CancelRefused("This booking was already cancelled.");
+        return cancel(booking, "STAFF");
+    }
+
+    private BookingRow cancel(BookingRow booking, String by) {
+        if (!calendars.cancel(booking.id(), by, now())) {
+            // someone else cancelled it a moment ago
+            throw new CancelRefused("This booking was already cancelled.");
+        }
+        return booking(booking.id());
     }
 
     private ServiceRow activeService(long id) {

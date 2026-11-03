@@ -1,6 +1,7 @@
 package io.github.viniciusclemos.booking.api;
 
 import io.github.viniciusclemos.booking.scheduling.BookingRefused;
+import io.github.viniciusclemos.booking.scheduling.CancelRefused;
 import io.github.viniciusclemos.booking.scheduling.NotFound;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -27,6 +28,12 @@ public class ApiErrors {
     ErrorBody refused(BookingRefused e) {
         return new ErrorBody("This time can't be booked",
                 e.violations().stream().map(v -> new Problem(v.name(), v.message())).toList());
+    }
+
+    @ExceptionHandler(CancelRefused.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    ErrorBody cancelRefused(CancelRefused e) {
+        return new ErrorBody(e.getMessage(), List.of());
     }
 
     @ExceptionHandler(NotFound.class)

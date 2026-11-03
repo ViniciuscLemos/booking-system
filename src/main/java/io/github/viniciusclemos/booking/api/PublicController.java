@@ -8,6 +8,7 @@ import io.github.viniciusclemos.booking.store.BookingRow;
 import io.github.viniciusclemos.booking.store.CalendarStore;
 import io.github.viniciusclemos.booking.store.ServiceRow;
 import io.github.viniciusclemos.booking.store.ServiceStore;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -89,29 +90,40 @@ public class PublicController {
             @NotBlank @Pattern(regexp = "[0-9 ()+\\-]{8,20}", message = "must be a phone number") String clientPhone) {
     }
 
+    // what the client sees of a booking: no phone, and the cancel deadline
     public record BookingView(long id, long serviceId, String service, String clientName, LocalDateTime starts,
-                              LocalDateTime ends, String status) {
+                              LocalDateTime ends, String status, LocalDateTime cancelUntil, boolean canCancel) {
+    }
 
-        static BookingView of(BookingRow row) {
-            return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.clientName(), row.starts(),
-                    row.ends(), row.status());
-        }
+    private BookingView view(BookingRow row) {
+        return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.clientName(), row.starts(),
+                row.ends(), row.status(), scheduling.cancelDeadline(row), scheduling.clientCanCancel(row));
+    }
+
+    public record Created(@JsonUnwrapped BookingView booking, String cancelToken) {
     }
 
     @PostMapping("/bookings")
     @ResponseStatus(HttpStatus.CREATED)
-    BookingView book(@Valid @RequestBody NewBooking body) {
+    Created book(@Valid @RequestBody NewBooking body) {
         String phone = body.clientPhone().trim();
         if (phone.chars().filter(Character::isDigit).count() < 8) {
             throw new IllegalArgumentException("The phone needs at least 8 digits");
         }
-        return BookingView.of(scheduling.book(body.serviceId(), body.start().withSecond(0).withNano(0),
-                body.clientName().trim(), phone));
+        var booked = scheduling.book(body.serviceId(), body.start().withSecond(0).withNano(0),
+                body.clientName().trim(), phone);
+        return new Created(view(booked.booking()), booked.cancelToken());
     }
 
-    // the phone stays out of the public view; the business sees it in the admin list
-    @GetMapping("/bookings/{id}")
-    BookingView booking(@PathVariable long id) {
-        return BookingView.of(scheduling.booking(id));
+    // looked up by the token in the cancel link and never by id: ids go 1, 2, 3...
+    // and anyone could walk through them reading names
+    @GetMapping("/bookings/by-token/{token}")
+    BookingView byToken(@PathVariable String token) {
+        return view(scheduling.byCancelToken(token));
+    }
+
+    @PostMapping("/bookings/by-token/{token}/cancel")
+    BookingView cancel(@PathVariable String token) {
+        return view(scheduling.cancelByClient(token));
     }
 }

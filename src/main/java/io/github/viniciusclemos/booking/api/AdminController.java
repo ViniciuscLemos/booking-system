@@ -3,6 +3,7 @@ package io.github.viniciusclemos.booking.api;
 import io.github.viniciusclemos.booking.domain.TimeRange;
 import io.github.viniciusclemos.booking.domain.WeeklySchedule;
 import io.github.viniciusclemos.booking.scheduling.NotFound;
+import io.github.viniciusclemos.booking.scheduling.SchedulingService;
 import io.github.viniciusclemos.booking.store.BookingRow;
 import io.github.viniciusclemos.booking.store.CalendarStore;
 import io.github.viniciusclemos.booking.store.ServiceRow;
@@ -43,10 +44,12 @@ public class AdminController {
 
     private final ServiceStore services;
     private final CalendarStore calendars;
+    private final SchedulingService scheduling;
 
-    public AdminController(ServiceStore services, CalendarStore calendars) {
+    public AdminController(ServiceStore services, CalendarStore calendars, SchedulingService scheduling) {
         this.services = services;
         this.calendars = calendars;
+        this.scheduling = scheduling;
     }
 
     public record ServiceForm(
@@ -113,9 +116,14 @@ public class AdminController {
         return Map.of("id", calendars.addTimeOff(form.starts(), form.ends(), form.reason()));
     }
 
+    // cancelled ones too, so the staff knows that slot opened up and why
     @GetMapping("/bookings")
     List<BookingRow> bookings(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return calendars.confirmedBetween(date.atStartOfDay(), date.plusDays(1).atStartOfDay()).stream()
-                .filter(b -> b.starts().toLocalDate().equals(date)).toList();
+        return calendars.bookingsOn(date);
+    }
+
+    @PostMapping("/bookings/{id}/cancel")
+    BookingRow cancel(@PathVariable long id) {
+        return scheduling.cancelByStaff(id);
     }
 }
