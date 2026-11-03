@@ -63,7 +63,11 @@
     <p class="kicker">Booked</p>
     <h2 id="done-title"></h2>
     <dl class="receipt" id="receipt"></dl>
-    <p class="muted">If you can't make it, just give us a call.</p>
+    <div class="cancel-box" id="cancel-box">
+      <p>Can't make it? You can cancel online until <b id="cancel-until"></b>, with this link:</p>
+      <p class="cancel-link"><a id="cancel-link" href="#"></a> <button type="button" class="link" id="copy-link">Copy</button></p>
+      <p class="muted">Keep it somewhere, it's the only way to cancel without calling.</p>
+    </div>
     <button type="button" class="link" id="again">Book another time</button>
   </main>
 

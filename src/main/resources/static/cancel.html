@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your booking</title>
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="cancel.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1 id="business-name">&nbsp;</h1>
+      <p class="address" id="business-address"></p>
+    </div>
+  </header>
+
+  <main class="wrap done" id="view" tabindex="-1">
+    <p class="kicker" id="kicker">Your booking</p>
+    <h2 id="title">Loading…</h2>
+    <dl class="receipt" id="receipt" hidden></dl>
+    <p id="note"></p>
+    <div class="actions">
+      <button type="button" class="danger" id="cancel" hidden>Cancel this booking</button>
+      <a class="link" href="./" id="book">Book a time</a>
+    </div>
+    <p class="error" id="error" role="alert" hidden></p>
+  </main>
+</body>
+</html>

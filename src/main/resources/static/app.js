@@ -245,11 +245,30 @@ function showDone(booking) {
     ['Booking', `#${booking.id}`],
   ];
   $('receipt').replaceChildren(...rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+
+  // the token goes after the #, which the browser never sends to a server (not even in the
+  // Referer of another site), so it doesn't end up in anyone's logs
+  const link = new URL(`cancel.html#${booking.cancelToken}`, location.href).href;
+  $('cancel-link').href = link;
+  $('cancel-link').textContent = link.replace(/^https?:\/\//, '');
+  const until = booking.cancelUntil;
+  $('cancel-until').textContent = `${formatDate(until.slice(0, 10), { weekday: 'short', month: 'short', day: 'numeric' })} at ${until.slice(11, 16)}`;
+  $('cancel-box').hidden = !booking.canCancel;
   $('booking').hidden = true;
   $('done').hidden = false;
   $('done').focus();
   window.scrollTo({ top: 0 });
 }
+
+$('copy-link').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('cancel-link').href);
+    $('copy-link').textContent = 'Copied';
+  } catch {
+    $('copy-link').textContent = 'Select it and copy';
+  }
+  setTimeout(() => { $('copy-link').textContent = 'Copy'; }, 2000);
+});
 
 $('again').addEventListener('click', async () => {
   $('done').hidden = true;

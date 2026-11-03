@@ -196,6 +196,26 @@ input[aria-invalid="true"] { border-color: var(--red); }
   .confirm { width: 100%; }
 }
 
+/* cancel link on the confirmation and the cancel page */
+.cancel-box { margin: 0 0 20px; }
+.cancel-box p { margin: 0 0 6px; }
+.cancel-link { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.cancel-link a { color: var(--ink); word-break: break-all; font-size: 0.92rem; }
+.danger {
+  margin-top: 4px;
+  padding: 11px 20px;
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--red);
+  font-weight: 600;
+  cursor: pointer;
+}
+.danger:hover { background: var(--red); color: var(--paper); }
+.danger:disabled { opacity: 0.6; cursor: progress; }
+.cancelled-stamp { color: var(--red); }
+.actions { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+
 /* ---------- staff page ---------- */
 
 .top-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
@@ -231,10 +251,16 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .agenda .break { color: var(--muted); font-size: 0.85rem; padding: 10px 4px; }
 .agenda .break span { grid-column: 2 / span 2; }
 .agenda .empty { display: block; color: var(--muted); }
+.agenda .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.link.small { font-size: 0.85rem; color: var(--muted); }
+.link.small:hover { color: var(--red); }
+.agenda .section { display: block; padding: 22px 4px 8px; font: 600 1rem var(--serif); color: var(--muted); }
+.agenda .is-cancelled .when, .agenda .is-cancelled b { color: var(--muted); text-decoration: line-through; }
+.agenda .is-cancelled .cancelled-stamp { font-size: 0.85rem; }
 
 .foot a { color: inherit; }
 
 @media (max-width: 560px) {
   .agenda li { grid-template-columns: 58px 1fr; row-gap: 4px; }
-  .phone { grid-column: 2; }
+  .agenda .side { grid-column: 2; flex-direction: row; align-items: baseline; gap: 16px; }
 }

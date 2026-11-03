@@ -143,11 +143,13 @@ function rows(bookings, ranges) {
   return out;
 }
 
-function render(bookings) {
+function render(all) {
   const ranges = state.business.hours[weekdayOf(state.date)] || [];
   const list = $('agenda');
+  const bookings = all.filter((b) => b.status === 'CONFIRMED');
+  const cancelled = all.filter((b) => b.status === 'CANCELLED');
 
-  if (!ranges.length && !bookings.length) {
+  if (!ranges.length && !all.length) {
     $('agenda-summary').textContent = '';
     list.replaceChildren(el('li', { class: 'empty' }, 'Closed on this day.'));
     return;
@@ -158,6 +160,7 @@ function render(bookings) {
   $('agenda-summary').textContent = bookings.length
     ? `${bookings.length} booking${bookings.length === 1 ? '' : 's'} · ${open ? Math.round((100 * booked) / open) : 0}% of the day booked`
     : 'Nothing booked yet.';
+  if (cancelled.length) $('agenda-summary').textContent += ` · ${cancelled.length} cancelled`;
 
   list.replaceChildren(...rows(bookings, ranges).map((row) => {
     if (row.gap) {
@@ -168,13 +171,48 @@ function render(bookings) {
         el('span', { class: 'when' }, clock(row.from)),
         el('span', {}, `Free until ${clock(row.to)}`));
     }
-    const b = row.booking;
-    const phone = b.clientPhone.replace(/[^\d+]/g, '');
-    return el('li', { class: 'booking-row' },
-      el('span', { class: 'when' }, hhmm(b.starts.slice(11)), el('small', {}, hhmm(b.ends.slice(11)))),
-      el('span', { class: 'who-what' }, el('b', {}, b.clientName), el('span', {}, b.serviceName)),
-      el('a', { class: 'phone', href: `tel:${phone}` }, prettyPhone(b.clientPhone)));
+    return bookingRow(row.booking);
   }));
+
+  // cancelled ones go at the end, so they don't get in the way of the day but the staff
+  // still sees why a slot opened up
+  if (cancelled.length) {
+    list.append(el('li', { class: 'section' }, el('span', {}, 'Cancelled')));
+    for (const b of cancelled) list.append(bookingRow(b));
+  }
+}
+
+function bookingRow(b) {
+  const phone = b.clientPhone.replace(/[^\d+]/g, '');
+  const isCancelled = b.status === 'CANCELLED';
+  const who = el('span', { class: 'who-what' }, el('b', {}, b.clientName), el('span', {}, b.serviceName));
+  if (isCancelled) {
+    const by = b.cancelledBy === 'CLIENT' ? 'by the client' : 'by the staff';
+    who.append(el('span', { class: 'cancelled-stamp' }, `Cancelled ${by} at ${hhmm(b.cancelledAt.slice(11))}`));
+  }
+  const side = el('span', { class: 'side' }, el('a', { class: 'phone', href: `tel:${phone}` }, prettyPhone(b.clientPhone)));
+  if (!isCancelled) {
+    const cancel = el('button', { type: 'button', class: 'link small' }, 'Cancel');
+    cancel.addEventListener('click', async () => {
+      // the first click asks, the second one does it
+      if (!cancel.dataset.sure) {
+        cancel.dataset.sure = '1';
+        cancel.textContent = 'Sure? Cancel it';
+        return;
+      }
+      cancel.disabled = true;
+      try {
+        await api(`/api/admin/bookings/${b.id}/cancel`, { method: 'POST' });
+      } catch (err) {
+        if (err.status === 401) return show('login');
+      }
+      await loadDay(state.date);
+    });
+    side.append(cancel);
+  }
+  return el('li', { class: isCancelled ? 'booking-row is-cancelled' : 'booking-row' },
+    el('span', { class: 'when' }, hhmm(b.starts.slice(11)), el('small', {}, hhmm(b.ends.slice(11)))),
+    who, side);
 }
 
 $('prev').addEventListener('click', () => loadDay(shift(state.date, -1)));
