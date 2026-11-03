@@ -8,7 +8,7 @@ Building a form that saves a date is easy. The hard part is the rules: two clien
 
 ![The booking page: services with price and duration, two weeks of days with how many times are free, the times of the chosen day and the client's details](docs/booking-desktop.png)
 
-Work in progress. What works today: the rules, a REST API on PostgreSQL, the client's booking page and a staff page with login. Cancelling and more than one professional come next.
+Work in progress. What works today: the rules, a REST API on PostgreSQL, the client's booking page and a staff page with login, and cancelling. More than one professional comes next.
 
 ## The booking page
 
@@ -25,9 +25,23 @@ It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no b
   <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
 </p>
 
+## Cancelling
+
+The confirmation shows a link the client keeps. It opens a page with the booking and a button to cancel, up to 3 hours before the time (`booking.cancel-until`). After that the page says to call instead, and the staff can still cancel from their side at any time.
+
+<p>
+  <img src="docs/booking-done.png" alt="The confirmation with the cancel link and until when it works" width="420">
+  <img src="docs/cancel-page.png" alt="The cancel page with the booking and the cancel button" width="420">
+</p>
+
+- The link has a random 24 character token. The database keeps only its SHA-256, so a leaked backup can't be used to cancel other people's bookings.
+- The token goes after the `#` in the link. Browsers never send that part to a server, not even in the Referer to another site, so it stays out of server logs.
+- Bookings can't be read by id anymore (`/api/bookings/1`, `/2`, `/3`... would let anyone walk through the clients' names). Only by the token.
+- Cancelling is an `UPDATE ... WHERE status = 'CONFIRMED'`, so two clicks at the same moment can't both cancel, and the time is free again right away (the overlap constraint only looks at confirmed bookings).
+
 ## The staff side
 
-`/admin.html` is where the barber logs in and sees the day: each booking with the client's phone (a tap calls it on the phone), and the free time between them, so it's easy to see where a walk-in fits.
+`/admin.html` is where the barber logs in and sees the day: each booking with the client's phone (a tap calls it on the phone), and the free time between them, so it's easy to see where a walk-in fits. Cancelled bookings show up at the end, saying who cancelled and when.
 
 <p>
   <img src="docs/staff-agenda.png" alt="The staff page: the day's bookings with time, client, service and phone, and the free gaps between them" width="560">
@@ -98,7 +112,8 @@ Client side:
 | `GET /api/availability?serviceId=1&date=2026-11-03` | free times of a day |
 | `GET /api/availability/days?serviceId=1&from=2026-11-02&count=14` | how each day looks, in one go |
 | `POST /api/bookings` | `{"serviceId":1,"start":"2026-11-03T10:00","clientName":"Ana","clientPhone":"(11) 98888-7777"}` |
-| `GET /api/bookings/{id}` | the booking, without the phone |
+| `GET /api/bookings/by-token/{token}` | the booking from the cancel link, without the phone |
+| `POST /api/bookings/by-token/{token}/cancel` | cancels it, 409 if it's too late or already cancelled |
 
 A refused booking answers 409 with the reasons:
 
@@ -145,6 +160,5 @@ The rules don't know about Spring or the database, which is why most of the test
 
 ## What's next
 
-- cancelling, with a deadline (up to X hours before), from a link the client gets
 - several professionals, each with their own calendar
 - editing services and hours from the staff page (today it's only through the API)
