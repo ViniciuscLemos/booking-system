@@ -8,6 +8,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <script src="admin.js" defer></script>
+  <script src="admin-edit.js" defer></script>
 </head>
 <body class="staff">
   <header class="top">
@@ -39,6 +40,12 @@
     </form>
   </main>
 
+  <nav class="wrap tabs" id="tabs" aria-label="Staff sections" hidden>
+    <a href="#agenda" data-view="agenda">Agenda</a>
+    <a href="#services" data-view="services">Services</a>
+    <a href="#hours" data-view="hours">Opening hours</a>
+  </nav>
+
   <main class="wrap" id="agenda-view" hidden>
     <div class="day-nav">
       <button type="button" class="arrow" id="prev" aria-label="Previous day">‹</button>
@@ -48,6 +55,26 @@
     </div>
     <p class="agenda-summary" id="agenda-summary"></p>
     <ol class="agenda" id="agenda"></ol>
+  </main>
+
+  <main class="wrap" id="services-view" hidden>
+    <h2 class="section-title">Services</h2>
+    <p class="muted intro">What clients can book. A hidden service stays out of the booking page, but its bookings stay as they are.</p>
+    <ol class="services-admin" id="services-admin"></ol>
+    <button type="button" class="link" id="add-service">Add a service</button>
+  </main>
+
+  <main class="wrap" id="hours-view" hidden>
+    <h2 class="section-title">Opening hours</h2>
+    <p class="muted intro">A day can have more than one stretch; the gap between them is the break. Bookings already made aren't touched.</p>
+    <form id="hours-form" novalidate>
+      <ol class="week" id="week"></ol>
+      <p class="error" id="hours-error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="submit" class="confirm">Save hours</button>
+        <span class="saved" id="hours-saved" hidden>Saved.</span>
+      </div>
+    </form>
   </main>
 
   <footer class="wrap foot">

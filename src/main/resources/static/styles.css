@@ -260,6 +260,45 @@ input[aria-invalid="true"] { border-color: var(--red); }
 
 .foot a { color: inherit; }
 
+/* sections of the staff page: plain text links, the current one underlined */
+.tabs { display: flex; gap: 22px; padding-top: 16px; padding-bottom: 0; border-bottom: 0; }
+.tabs a { color: var(--muted); text-decoration: none; padding: 6px 0; border-bottom: 2px solid transparent; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+
+.section-title { font: 600 1.4rem var(--serif); margin: 26px 0 4px; }
+.intro { margin: 0 0 18px; max-width: 60ch; }
+.saved { color: var(--green); }
+
+.services-admin { list-style: none; margin: 0 0 16px; padding: 0; border-top: 1px solid var(--line); }
+.services-admin > li { border-bottom: 1px solid var(--line); padding: 13px 4px; }
+.service-line { display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: baseline; }
+.service-line .meta { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.service-line .off { color: var(--muted); }
+.tag { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-left: 8px; }
+
+.edit-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 14px; padding: 6px 0 4px; }
+.edit-form .wide { grid-column: 1 / -1; }
+.edit-form .check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); }
+.edit-form .actions { grid-column: 1 / -1; }
+.edit-form .confirm { margin-top: 0; }
+
+.week { list-style: none; margin: 0 0 8px; padding: 0; border-top: 1px solid var(--line); }
+.week > li { display: grid; grid-template-columns: 110px 1fr; gap: 14px; align-items: baseline; padding: 12px 4px; border-bottom: 1px solid var(--line); }
+.week .dayname { font: 600 1rem var(--serif); }
+.ranges { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.range { display: flex; align-items: center; gap: 8px; }
+.range input { width: 7.5em; padding: 7px 8px; }
+.range .remove { color: var(--muted); }
+.closed-note { color: var(--muted); }
+
+@media (max-width: 560px) {
+  .edit-form { grid-template-columns: 1fr 1fr; }
+  .service-line { grid-template-columns: 1fr auto; }
+  .service-line .meta { grid-column: 1; }
+  .week > li { grid-template-columns: 1fr; gap: 6px; }
+}
+
 @media (max-width: 560px) {
   .agenda li { grid-template-columns: 58px 1fr; row-gap: 4px; }
   .agenda .side { grid-column: 2; flex-direction: row; align-items: baseline; gap: 16px; }

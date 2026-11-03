@@ -31,7 +31,7 @@ async function api(path, options = {}) {
   if (options.method && options.method !== 'GET') headers['X-XSRF-TOKEN'] = xsrf();
   const res = await fetch(path, { ...options, headers, credentials: 'same-origin' });
   const body = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw Object.assign(new Error(body?.error || 'Something went wrong'), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(body?.error || 'Something went wrong'), { status: res.status, problems: body?.problems });
   return body;
 }
 
@@ -53,11 +53,27 @@ function prettyPhone(text) {
   return text;
 }
 
+// one view at a time; the tabs and the name only once logged in
 function show(view) {
-  $('login-view').hidden = view !== 'login';
-  $('agenda-view').hidden = view !== 'agenda';
-  $('who').hidden = view !== 'agenda';
+  for (const name of ['login', 'agenda', 'services', 'hours']) $(`${name}-view`).hidden = view !== name;
+  $('who').hidden = view === 'login';
+  $('tabs').hidden = view === 'login';
+  for (const tab of document.querySelectorAll('#tabs a')) {
+    if (tab.dataset.view === view) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  }
 }
+
+$('tabs').addEventListener('click', (event) => {
+  const tab = event.target.closest('a[data-view]');
+  if (!tab) return;
+  event.preventDefault();
+  const view = tab.dataset.view;
+  show(view);
+  if (view === 'agenda') loadDay(state.date);
+  if (view === 'services') loadServices();
+  if (view === 'hours') loadHours();
+});
 
 // login
 
