@@ -225,6 +225,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .login { max-width: 360px; margin: 36px 0 0; display: flex; flex-direction: column; gap: 14px; }
 .login h2 { font: 600 1.4rem var(--serif); margin: 0 0 4px; }
 .login .error { margin: 0; }
+.demo-login { margin: 0; padding: 10px 14px; background: var(--green-soft); border-radius: 6px; font-size: 0.92rem; }
 .login .confirm { margin-top: 4px; align-self: flex-start; }
 
 .day-nav { display: flex; align-items: center; gap: 10px; padding: 28px 0 4px; flex-wrap: wrap; }

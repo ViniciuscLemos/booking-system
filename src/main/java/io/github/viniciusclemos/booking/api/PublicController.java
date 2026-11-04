@@ -9,11 +9,13 @@ import io.github.viniciusclemos.booking.store.CalendarStore;
 import io.github.viniciusclemos.booking.store.ServiceRow;
 import io.github.viniciusclemos.booking.store.ServiceStore;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
+import io.github.viniciusclemos.booking.demo.DemoData;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,6 +43,9 @@ public class PublicController {
     private final ServiceStore services;
     private final CalendarStore calendars;
     private final BookingSettings settings;
+    // only in the public demo, where the login is meant to be shared
+    @Value("${booking.demo:false}")
+    private boolean demo;
 
     public PublicController(SchedulingService scheduling, ServiceStore services, CalendarStore calendars,
                             BookingSettings settings) {
@@ -50,14 +55,18 @@ public class PublicController {
         this.settings = settings;
     }
 
+    public record DemoLogin(String email, String password) {
+    }
+
     public record BusinessView(String name, String address, String zone, LocalDateTime now,
-                               Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes) {
+                               Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes, DemoLogin demoLogin) {
     }
 
     @GetMapping("/business")
     BusinessView business() {
         return new BusinessView(settings.businessName(), settings.businessAddress(), settings.zone().getId(),
-                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes());
+                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes(),
+                demo ? new DemoLogin(DemoData.EMAIL, DemoData.PASSWORD) : null);
     }
 
     @GetMapping("/services")

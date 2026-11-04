@@ -266,6 +266,13 @@ async function start() {
   state.business = await api('/api/business');
   state.today = state.business.now.slice(0, 10);
   $('business-name').textContent = state.business.name;
+  // the public demo hands out its login, so whoever opens it can look around
+  const demo = state.business.demoLogin;
+  if (demo) {
+    $('demo-login').replaceChildren('This is a demo. Log in with ', el('b', {}, demo.email), ' and ', el('b', {}, demo.password), '.');
+    $('demo-login').hidden = false;
+    document.querySelector('#login input[name=email]').value = demo.email;
+  }
   document.title = `Staff · ${state.business.name}`;
   try {
     await openAgenda(await api('/api/auth/me'));
