@@ -1,0 +1,16 @@
+# Render config (Blueprint): the app as a Docker service on the free plan. The database is
+# a free Neon Postgres (Render's free one is deleted after 30 days), so DB_URL is pasted by hand.
+services:
+  - type: web
+    name: booking-system
+    runtime: docker
+    plan: free
+    region: virginia
+    healthCheckPath: /api/business
+    envVars:
+      # the public demo: a barbershop set up and a login shown on the staff page
+      - key: BOOKING_DEMO
+        value: "true"
+      # jdbc:postgresql://HOST/neondb?user=...&password=...&sslmode=require
+      - key: DB_URL
+        sync: false
