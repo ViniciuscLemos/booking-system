@@ -50,6 +50,13 @@ The confirmation shows a link the client keeps. It opens a page with the booking
 
 The other two tabs are for setting things up: services (name, duration, the clean-up time after, price, and whether clients can see it) and the week's opening hours, where a day can have more than one stretch and the gap between them is the break. Two stretches that overlap are refused.
 
+The last tab is for days off: a special date (closed, or open at other hours, like a short Christmas Eve) and time away during a day (the dentist at 14:00). Clients stop seeing those times right away. Bookings that were already made aren't moved or cancelled behind anyone's back: the page says how many are in the way, and the agenda marks them so the staff can call those clients.
+
+<p>
+  <img src="docs/staff-days.png" alt="The days off tab: special dates and time away, each with a form to add one" width="420">
+  <img src="docs/staff-agenda-away.png" alt="The agenda with the time away and a booking inside it marked to call the client" width="420">
+</p>
+
 <p>
   <img src="docs/staff-services.png" alt="Editing a service: name, description, duration, clean-up time, price and whether it shows on the booking page" width="420">
   <img src="docs/staff-hours.png" alt="The week's opening hours, each day with its stretches" width="300">
@@ -168,4 +175,3 @@ The rules don't know about Spring or the database, which is why most of the test
 ## What's next
 
 - several professionals, each with their own calendar
-- special dates and time off from the staff page (today they're only in the API)
