@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="styles.css">
   <script src="admin.js" defer></script>
   <script src="admin-edit.js" defer></script>
+  <script src="admin-days.js" defer></script>
 </head>
 <body class="staff">
   <header class="top">
@@ -44,6 +45,7 @@
     <a href="#agenda" data-view="agenda">Agenda</a>
     <a href="#services" data-view="services">Services</a>
     <a href="#hours" data-view="hours">Opening hours</a>
+    <a href="#days" data-view="days">Days off</a>
   </nav>
 
   <main class="wrap" id="agenda-view" hidden>
@@ -75,6 +77,46 @@
         <span class="saved" id="hours-saved" hidden>Saved.</span>
       </div>
     </form>
+  </main>
+
+  <main class="wrap" id="days-view" hidden>
+    <h2 class="section-title">Days off</h2>
+    <p class="muted intro">Holidays, a short Saturday, a doctor's appointment. Clients just stop seeing those times; bookings already made stay, and the page says how many to look at.</p>
+
+    <section class="days-block">
+      <h3 class="block-title">Special dates</h3>
+      <ol class="plain-list" id="special-list"></ol>
+      <form class="inline-form" id="special-form" novalidate>
+        <label>Date <input type="date" name="date" required></label>
+        <label class="check"><input type="radio" name="kind" value="closed" checked> Closed all day</label>
+        <label class="check"><input type="radio" name="kind" value="hours"> Open</label>
+        <span class="range" id="special-range" hidden>
+          <input type="time" name="from" value="09:00" aria-label="Open from">
+          <span aria-hidden="true">to</span>
+          <input type="time" name="to" value="13:00" aria-label="Open until">
+        </span>
+        <button type="submit" class="confirm small-btn">Add date</button>
+      </form>
+      <p class="error" id="special-error" role="alert" hidden></p>
+      <p class="saved" id="special-note" hidden></p>
+    </section>
+
+    <section class="days-block">
+      <h3 class="block-title">Time away</h3>
+      <ol class="plain-list" id="away-list"></ol>
+      <form class="inline-form" id="away-form" novalidate>
+        <label>Date <input type="date" name="date" required></label>
+        <span class="range">
+          <input type="time" name="from" value="14:00" aria-label="Away from">
+          <span aria-hidden="true">to</span>
+          <input type="time" name="to" value="15:00" aria-label="Away until">
+        </span>
+        <label class="grow">Reason <input name="reason" maxlength="200" placeholder="dentist (only the staff sees it)"></label>
+        <button type="submit" class="confirm small-btn">Add</button>
+      </form>
+      <p class="error" id="away-error" role="alert" hidden></p>
+      <p class="saved" id="away-note" hidden></p>
+    </section>
   </main>
 
   <footer class="wrap foot">

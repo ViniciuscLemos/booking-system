@@ -55,7 +55,7 @@ function prettyPhone(text) {
 
 // one view at a time; the tabs and the name only once logged in
 function show(view) {
-  for (const name of ['login', 'agenda', 'services', 'hours']) $(`${name}-view`).hidden = view !== name;
+  for (const name of ['login', 'agenda', 'services', 'hours', 'days']) $(`${name}-view`).hidden = view !== name;
   $('who').hidden = view === 'login';
   $('tabs').hidden = view === 'login';
   for (const tab of document.querySelectorAll('#tabs a')) {
@@ -73,6 +73,7 @@ $('tabs').addEventListener('click', (event) => {
   if (view === 'agenda') loadDay(state.date);
   if (view === 'services') loadServices();
   if (view === 'hours') loadHours();
+  if (view === 'days') loadDaysOff();
 });
 
 // login
@@ -125,42 +126,59 @@ async function loadDay(date) {
   $('agenda-day').textContent = date === state.today ? `Today, ${longDate(date).split(', ')[1]}` : longDate(date);
   $('today').hidden = date === state.today;
   let bookings;
+  let day;
   try {
-    bookings = await api(`/api/admin/bookings?date=${date}`);
+    // the day's own hours (a special date changes them) and the time away
+    [bookings, day] = await Promise.all([api(`/api/admin/bookings?date=${date}`), api(`/api/admin/day?date=${date}`)]);
   } catch (err) {
     if (err.status === 401) return show('login');
     $('agenda').replaceChildren(el('li', { class: 'empty' }, err.message));
     return;
   }
-  render(bookings);
+  render(bookings, day);
 }
 
-// bookings in order, with the free time between them inside the working hours
-function rows(bookings, ranges) {
+// minutes from midnight of the agenda's day; time off that started before or ends after it is cut
+function dayMinutes(iso, fallback) {
+  if (iso.slice(0, 10) < state.date) return 0;
+  if (iso.slice(0, 10) > state.date) return fallback;
+  return minutes(iso.slice(11));
+}
+
+// bookings and time away in order, with the free time between them inside the working hours
+function rows(bookings, ranges, away = []) {
   const out = [];
-  const sorted = [...bookings].sort((a, b) => a.starts.localeCompare(b.starts));
+  const items = [
+    ...bookings.map((b) => ({ start: minutes(b.starts.slice(11)), until: minutes(b.blockedUntil.slice(11)), row: { booking: b } })),
+    ...away.map((t) => ({ start: dayMinutes(t.starts, 0), until: dayMinutes(t.ends, 24 * 60), row: { away: t } })),
+  ].sort((a, b) => a.start - b.start);
   let i = 0;
+  let awayUntil = -1;
   ranges.forEach((range, r) => {
     let cursor = minutes(range.start);
     const end = minutes(range.end);
-    for (; i < sorted.length && minutes(sorted[i].starts.slice(11)) < end; i++) {
-      const b = sorted[i];
-      const start = minutes(b.starts.slice(11));
+    for (; i < items.length && items[i].start < end; i++) {
+      const item = items[i];
+      const start = Math.max(item.start, cursor);
       if (start - cursor >= 15) out.push({ free: true, from: cursor, to: start });
-      out.push({ booking: b });
-      cursor = Math.max(cursor, minutes(b.blockedUntil.slice(11)));
+      // a booking made before the time away was set: the staff has to call that client
+      if (item.row.booking && item.start < awayUntil) item.row.clash = true;
+      if (item.row.away) awayUntil = Math.max(awayUntil, item.until);
+      out.push(item.row);
+      cursor = Math.max(cursor, item.until);
     }
     if (end - cursor >= 15) out.push({ free: true, from: cursor, to: end });
     // the gap until the next range of the day is the break
     if (r < ranges.length - 1) out.push({ gap: true, from: end, to: minutes(ranges[r + 1].start) });
   });
   // a booking outside the regular hours (special date) still shows up
-  for (; i < sorted.length; i++) out.push({ booking: sorted[i] });
+  for (; i < items.length; i++) out.push(items[i].row);
   return out;
 }
 
-function render(all) {
-  const ranges = state.business.hours[weekdayOf(state.date)] || [];
+function render(all, day) {
+  const ranges = day ? day.ranges : state.business.hours[weekdayOf(state.date)] || [];
+  const away = day ? day.timeOff : [];
   const list = $('agenda');
   const bookings = all.filter((b) => b.status === 'CONFIRMED');
   const cancelled = all.filter((b) => b.status === 'CANCELLED');
@@ -178,7 +196,14 @@ function render(all) {
     : 'Nothing booked yet.';
   if (cancelled.length) $('agenda-summary').textContent += ` · ${cancelled.length} cancelled`;
 
-  list.replaceChildren(...rows(bookings, ranges).map((row) => {
+  list.replaceChildren(...rows(bookings, ranges, away).map((row) => {
+    if (row.away) {
+      const from = row.away.starts.slice(0, 10) < state.date ? 'Earlier' : hhmm(row.away.starts.slice(11));
+      const until = row.away.ends.slice(0, 10) > state.date ? 'the end of the day' : hhmm(row.away.ends.slice(11));
+      return el('li', { class: 'away-row' },
+        el('span', { class: 'when' }, from),
+        el('span', {}, `Away until ${until}${row.away.reason ? ` · ${row.away.reason}` : ''}`));
+    }
     if (row.gap) {
       return el('li', { class: 'break' }, el('span', { class: 'when' }), el('span', {}, `Break, ${clock(row.from)} to ${clock(row.to)}`));
     }
@@ -187,7 +212,9 @@ function render(all) {
         el('span', { class: 'when' }, clock(row.from)),
         el('span', {}, `Free until ${clock(row.to)}`));
     }
-    return bookingRow(row.booking);
+    const li = bookingRow(row.booking);
+    if (row.clash) li.querySelector('.who-what').append(el('span', { class: 'cancelled-stamp' }, 'During your time away, call to move it'));
+    return li;
   }));
 
   // cancelled ones go at the end, so they don't get in the way of the day but the staff
