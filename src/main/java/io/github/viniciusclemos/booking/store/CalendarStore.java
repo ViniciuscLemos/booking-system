@@ -59,7 +59,7 @@ public class CalendarStore {
         return week;
     }
 
-    private Map<LocalDate, List<TimeRange>> overrides(LocalDate from, LocalDate to) {
+    public Map<LocalDate, List<TimeRange>> overrides(LocalDate from, LocalDate to) {
         Map<LocalDate, List<TimeRange>> byDate = new LinkedHashMap<>();
         db.sql("SELECT day, starts, ends FROM date_override WHERE day BETWEEN ? AND ? ORDER BY day, starts")
                 .params(from, to)
@@ -132,6 +132,23 @@ public class CalendarStore {
         }
         ranges.forEach(r -> db.sql("INSERT INTO date_override (day, starts, ends) VALUES (?, ?, ?)")
                 .params(date, r.start(), r.end()).update());
+    }
+
+    public boolean removeDate(LocalDate date) {
+        return db.sql("DELETE FROM date_override WHERE day = ?").param(date).update() > 0;
+    }
+
+    public record TimeOff(long id, LocalDateTime starts, LocalDateTime ends, String reason) {
+    }
+
+    /** Time off that hasn't ended yet, soonest first. */
+    public List<TimeOff> timeOffFrom(LocalDateTime from) {
+        return db.sql("SELECT id, starts, ends, reason FROM time_off WHERE ends > ? ORDER BY starts")
+                .param(from).query(TimeOff.class).list();
+    }
+
+    public boolean removeTimeOff(long id) {
+        return db.sql("DELETE FROM time_off WHERE id = ?").param(id).update() == 1;
     }
 
     public long addTimeOff(LocalDateTime starts, LocalDateTime ends, String reason) {

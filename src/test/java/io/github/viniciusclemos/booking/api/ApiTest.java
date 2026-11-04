@@ -34,6 +34,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -152,6 +153,36 @@ class ApiTest {
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-07"))
                 .andExpect(jsonPath("$.slots[0]").value("11:00:00"));
+    }
+
+    @Test
+    void specialDatesAndTimeOffCanBeListedAndUndone() throws Exception {
+        send(put("/api/admin/dates/2026-12-24"), "[{\"start\":\"09:00\",\"end\":\"13:00\"}]");
+        send(put("/api/admin/dates/2026-12-25"), "[]");
+        send(post("/api/admin/time-off"), """
+                {"starts":"2026-11-10T14:00","ends":"2026-11-10T15:30","reason":"dentist"}""");
+        // already over, so it doesn't show
+        send(post("/api/admin/time-off"), """
+                {"starts":"2026-10-01T09:00","ends":"2026-10-01T10:00","reason":"old"}""");
+
+        send(get("/api/admin/exceptions"), "")
+                .andExpect(jsonPath("$.dates[0].date").value("2026-12-24"))
+                .andExpect(jsonPath("$.dates[0].closed").value(false))
+                .andExpect(jsonPath("$.dates[1].closed").value(true))
+                .andExpect(jsonPath("$.timeOff", hasSize(1)))
+                .andExpect(jsonPath("$.timeOff[0].reason").value("dentist"));
+
+        // the agenda's view of a day: Tuesday's usual hours and the dentist in the middle
+        send(get("/api/admin/day").param("date", "2026-11-10"), "")
+                .andExpect(jsonPath("$.ranges", hasSize(2)))
+                .andExpect(jsonPath("$.timeOff[0].reason").value("dentist"));
+
+        send(delete("/api/admin/dates/2026-12-25"), "").andExpect(status().isNoContent());
+        send(delete("/api/admin/dates/2026-12-25"), "").andExpect(status().isNotFound());
+        send(delete("/api/admin/time-off/1"), "").andExpect(status().isNoContent());
+        send(get("/api/admin/exceptions"), "")
+                .andExpect(jsonPath("$.dates", hasSize(1)))
+                .andExpect(jsonPath("$.timeOff", hasSize(0)));
     }
 
     @Test

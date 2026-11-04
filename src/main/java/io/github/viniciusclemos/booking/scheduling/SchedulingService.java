@@ -2,6 +2,7 @@ package io.github.viniciusclemos.booking.scheduling;
 
 import io.github.viniciusclemos.booking.config.BookingSettings;
 import io.github.viniciusclemos.booking.domain.Booking;
+import io.github.viniciusclemos.booking.domain.BookingPolicy;
 import io.github.viniciusclemos.booking.domain.Calendar;
 import io.github.viniciusclemos.booking.store.BookingRow;
 import io.github.viniciusclemos.booking.store.CalendarStore;
@@ -89,6 +90,10 @@ public class SchedulingService {
 
     public BookingRow booking(long id) {
         return calendars.findBooking(id).orElseThrow(() -> new NotFound("Booking not found"));
+    }
+
+    public BookingPolicy policy() {
+        return settings.policy();
     }
 
     /** Until when the client can cancel this booking alone. */
