@@ -160,6 +160,17 @@ Then open http://localhost:8080. The staff page is http://localhost:8080/admin.h
 
 Against a real database, set `DB_URL`, `DB_USER`, `DB_PASSWORD`, `OWNER_EMAIL` and `OWNER_PASSWORD` and run `mvn spring-boot:run`. Flyway creates the tables. The business's rules (timezone, notice, how far ahead, slot grid) are in `application.properties`.
 
+## Putting it online
+
+It runs on Render's free plan, as a Docker service (`render.yaml` + `Dockerfile`), with the database on a free [Neon](https://neon.tech) Postgres, since Render's free database is deleted after 30 days.
+
+1. Create a project on Neon and copy the JDBC connection string (`jdbc:postgresql://...?user=...&password=...&sslmode=require`).
+2. On Render, New > Blueprint, pick this repo and paste that string in `DB_URL`.
+
+`BOOKING_DEMO=true` (already in the blueprint) makes it the public demo: the barbershop set up, the staff login shown on the staff page, and bookings topped up every night. For a real business, leave it off and set `OWNER_EMAIL` and `OWNER_PASSWORD` instead.
+
+The free instance sleeps after 15 minutes without visits, so the first page after that takes a while (Spring needs about half a minute to start).
+
 ## How the code is split
 
 ```
