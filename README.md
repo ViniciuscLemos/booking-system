@@ -4,6 +4,8 @@
 
 Online booking for small businesses like a barbershop, a clinic or a nail salon: the business sets up its services and opening hours, and clients pick a free time.
 
+Try it: **[booking-system-j7po.onrender.com](https://booking-system-j7po.onrender.com)**, a made-up barbershop. The staff side is at `/admin.html` and its login is shown there. It's a free instance, so the first visit after a while can take up to a minute.
+
 Building a form that saves a date is easy. The hard part is the rules: two clients can't get the same time, a 30 minute haircut can't start at 11:45 if lunch is at 12:00, the barber needs 10 minutes to clean up between clients, nobody can book for 5 minutes from now. That's the part I wanted to get right first, then the API and the page on top of it.
 
 ![The booking page: services with price and duration, two weeks of days with how many times are free, the times of the chosen day and the client's details](docs/booking-desktop.png)
