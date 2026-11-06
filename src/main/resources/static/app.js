@@ -4,7 +4,8 @@ const $ = (id) => document.getElementById(id);
 const WEEKDAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const DAYS_SHOWN = 14;
 
-const state = { business: null, services: [], service: null, days: [], date: null, time: null };
+// pro is the barber picked, or null for whoever is free
+const state = { business: null, services: [], service: null, pro: null, days: [], date: null, time: null };
 
 // "R$ 45", and the cents only when there are any
 const price = (cents) => new Intl.NumberFormat('pt-BR', {
@@ -93,16 +94,41 @@ async function pickService(service) {
   state.service = service;
   state.time = null;
   renderServices();
+  renderWho();
   $('step-day').hidden = false;
   $('step-details').hidden = true;
   await loadDays();
 }
 
-// 2. day
+// 2. who and day
+
+const withPro = () => (state.pro ? `&professionalId=${state.pro.id}` : '');
+
+// only when there's more than one person to pick from
+function renderWho() {
+  const pros = state.business.professionals;
+  $('who').hidden = pros.length < 2;
+  if (pros.length < 2) return;
+  const choice = (pro, label) => el('button', {
+    type: 'button', role: 'radio', class: 'who-pick',
+    'aria-checked': String((state.pro?.id ?? null) === (pro?.id ?? null)),
+    onclick: () => pickPro(pro),
+  }, label);
+  $('who').replaceChildren(el('span', { class: 'who-label' }, 'With'),
+    choice(null, 'whoever is free'), ...pros.map((p) => choice(p, p.name)));
+}
+
+async function pickPro(pro) {
+  state.pro = pro;
+  state.time = null;
+  renderWho();
+  $('step-details').hidden = true;
+  await loadDays();
+}
 
 async function loadDays() {
   const today = state.business.now.slice(0, 10);
-  state.days = await api(`/api/availability/days?serviceId=${state.service.id}&from=${today}&count=${DAYS_SHOWN}`);
+  state.days = await api(`/api/availability/days?serviceId=${state.service.id}&from=${today}&count=${DAYS_SHOWN}${withPro()}`);
   // keep the chosen day if it still has room, otherwise jump to the first one that does
   const current = state.days.find((d) => d.date === state.date && d.free > 0);
   const first = state.days.find((d) => d.free > 0);
@@ -140,7 +166,7 @@ async function pickDay(date, { scroll = true } = {}) {
   $('step-details').hidden = true;
   $('step-time').hidden = false;
   $('time-day').textContent = formatDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
-  const { slots } = await api(`/api/availability?serviceId=${state.service.id}&date=${date}`);
+  const { slots } = await api(`/api/availability?serviceId=${state.service.id}&date=${date}${withPro()}`);
   renderTimes(slots.map(hhmm));
   if (scroll) $('step-time').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -176,7 +202,7 @@ function pickTime(time) {
   $('summary').replaceChildren(
     el('b', {}, s.name), ', ',
     formatDate(state.date, { weekday: 'long', month: 'long', day: 'numeric' }),
-    ` from ${time} to ${addMinutes(time, s.durationMin)} · ${price(s.priceCents)}`);
+    ` from ${time} to ${addMinutes(time, s.durationMin)}${state.pro ? ` with ${state.pro.name}` : ''} · ${price(s.priceCents)}`);
   $('form-error').hidden = true;
   $('step-details').hidden = false;
   $('step-details').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -204,7 +230,10 @@ $('details').addEventListener('submit', async (event) => {
     const booking = await api('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serviceId: state.service.id, start: `${state.date}T${state.time}`, clientName: name, clientPhone: phone }),
+      body: JSON.stringify({
+        serviceId: state.service.id, start: `${state.date}T${state.time}`, clientName: name, clientPhone: phone,
+        professionalId: state.pro?.id ?? null,
+      }),
     });
     showDone(booking);
   } catch (err) {
@@ -240,6 +269,7 @@ function showDone(booking) {
   $('done-title').textContent = `See you ${formatDate(date, { weekday: 'long' })}, ${booking.clientName.split(' ')[0]}.`;
   const rows = [
     ['Service', booking.service],
+    ...(state.business.professionals.length > 1 ? [['With', booking.professional]] : []),
     ['When', `${formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}, ${start}–${end}`],
     ['Where', state.business.address],
     ['Booking', `#${booking.id}`],

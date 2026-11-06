@@ -56,6 +56,7 @@
       <button type="button" class="arrow" id="next" aria-label="Next day">›</button>
       <button type="button" class="link" id="today" hidden>Back to today</button>
     </div>
+    <div class="who" id="agenda-who" role="radiogroup" aria-label="Whose agenda" hidden></div>
     <p class="agenda-summary" id="agenda-summary"></p>
     <ol class="agenda" id="agenda"></ol>
   </main>
@@ -65,6 +66,15 @@
     <p class="muted intro">What clients can book. A hidden service stays out of the booking page, but its bookings stay as they are.</p>
     <ol class="services-admin" id="services-admin"></ol>
     <button type="button" class="link" id="add-service">Add a service</button>
+
+    <h2 class="section-title team-title">Team</h2>
+    <p class="muted intro">Who takes clients. Someone who leaves is turned off instead of deleted: their past bookings stay with their name.</p>
+    <ol class="plain-list" id="team"></ol>
+    <form class="inline-form" id="team-form" novalidate>
+      <label class="grow">Name <input name="name" maxlength="60" placeholder="a new barber"></label>
+      <button type="submit" class="confirm small-btn">Add</button>
+    </form>
+    <p class="error" id="team-error" role="alert" hidden></p>
   </main>
 
   <main class="wrap" id="hours-view" hidden>
@@ -112,6 +122,7 @@
           <span aria-hidden="true">to</span>
           <input type="time" name="to" value="15:00" aria-label="Away until">
         </span>
+        <label>Who <select name="who" id="away-who"><option value="">the whole place</option></select></label>
         <label class="grow">Reason <input name="reason" maxlength="200" placeholder="dentist (only the staff sees it)"></label>
         <button type="submit" class="confirm small-btn">Add</button>
       </form>

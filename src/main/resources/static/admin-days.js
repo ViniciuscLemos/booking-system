@@ -3,6 +3,12 @@
 const shortDate = (iso) => parseDate(iso).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
 
 async function loadDaysOff() {
+  // who can be away: the whole place, or one person
+  const who = $('away-who');
+  const picked = who.value;
+  who.replaceChildren(el('option', { value: '' }, 'the whole place'),
+    ...state.business.professionals.map((p) => el('option', { value: String(p.id) }, p.name)));
+  who.value = picked;
   let data;
   try {
     data = await api('/api/admin/exceptions');
@@ -20,7 +26,7 @@ async function loadDaysOff() {
 
   $('away-list').replaceChildren(...(data.timeOff.length ? data.timeOff.map((t) => listRow(
     shortDate(t.starts.slice(0, 10)),
-    `${hhmm(t.starts.slice(11))}–${t.ends.slice(0, 10) === t.starts.slice(0, 10) ? hhmm(t.ends.slice(11)) : `${shortDate(t.ends.slice(0, 10))} ${hhmm(t.ends.slice(11))}`}${t.reason ? ` · ${t.reason}` : ''}`,
+    `${t.professional || 'Everyone'}, ${hhmm(t.starts.slice(11))}–${t.ends.slice(0, 10) === t.starts.slice(0, 10) ? hhmm(t.ends.slice(11)) : `${shortDate(t.ends.slice(0, 10))} ${hhmm(t.ends.slice(11))}`}${t.reason ? ` · ${t.reason}` : ''}`,
     'Remove this time away',
     () => api(`/api/admin/time-off/${t.id}`, { method: 'DELETE' }),
   )) : [el('li', { class: 'empty' }, 'No time away coming up.')]));
@@ -106,7 +112,10 @@ $('away-form').addEventListener('submit', async (event) => {
     await api('/api/admin/time-off', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ starts: `${date}T${form.from.value}`, ends: `${date}T${form.to.value}`, reason: form.reason.value.trim() || null }),
+      body: JSON.stringify({
+        starts: `${date}T${form.from.value}`, ends: `${date}T${form.to.value}`, reason: form.reason.value.trim() || null,
+        professionalId: form.who.value ? Number(form.who.value) : null,
+      }),
     });
   } catch (err) {
     if (err.status === 401) return show('login');

@@ -16,6 +16,8 @@ Work in progress. What works today: the rules, a REST API on PostgreSQL, the cli
 
 Pick a service, a day, a time, write your name and phone, done. Each day shows how many times are still free, so a client doesn't click through full days. Times are split into morning, afternoon and evening.
 
+With more than one barber there's a "With" row above the days: *whoever is free*, or one of them by name. Picking one shows only their times. With *whoever is free*, a time shows up when at least one of them has it, and the booking goes to whoever has the fewest clients that day, so the work gets spread instead of always landing on the first name.
+
 If someone else takes the same time while the page is open, the booking is refused, the list of times is reloaded and the page says what happened, keeping the name and phone already typed:
 
 <img src="docs/booking-conflict.png" alt="A notice saying 18:00 is gone because someone already booked it, above the updated list of times" width="640">
@@ -53,6 +55,8 @@ The confirmation shows a link the client keeps. It opens a page with the booking
 The other two tabs are for setting things up: services (name, duration, the clean-up time after, price, and whether clients can see it) and the week's opening hours, where a day can have more than one stretch and the gap between them is the break. Two stretches that overlap are refused.
 
 The last tab is for days off: a special date (closed, or open at other hours, like a short Christmas Eve) and time away during a day (the dentist at 14:00). Clients stop seeing those times right away. Bookings that were already made aren't moved or cancelled behind anyone's back: the page says how many are in the way, and the agenda marks them so the staff can call those clients.
+
+With a team, time away is for one person or for the whole place, and the agenda has a row to see everyone's bookings (each with the barber's name) or one person's day with their free gaps. The team itself is on the services tab: add someone, rename, or turn off whoever left (their old bookings keep their name).
 
 <p>
   <img src="docs/staff-days.png" alt="The days off tab: special dates and time away, each with a form to add one" width="420">
@@ -109,11 +113,12 @@ So the database has the last word. The `booking` table has an exclusion constrai
 
 ```sql
 CONSTRAINT booking_no_overlap EXCLUDE USING gist (
+    professional_id WITH =,
     tsrange(starts, blocked_until, '[)') WITH &&
 ) WHERE (status = 'CONFIRMED')
 ```
 
-Postgres refuses any confirmed booking whose time range overlaps another one, buffer included. The API turns that error into the same 409 the rules give. There's a test that fires 8 bookings for the same time at once: one gets in, seven get `CLASHES_WITH_BOOKING`, and the table ends up with one row. Cancelled bookings are left out of the constraint, so cancelling frees the time.
+Postgres refuses any confirmed booking whose time range overlaps another one *with the same person*, buffer included. Rui at 10:00 and Bia at 10:00 are fine; Rui twice at 10:00 isn't. Mixing `=` on a plain column with `&&` on a range in one constraint needs the `btree_gist` extension. The API turns that error into the same 409 the rules give. There's a test that fires 8 bookings for the same time at once: one gets in, seven get `CLASHES_WITH_BOOKING`, and the table ends up with one row. Cancelled bookings are left out of the constraint, so cancelling frees the time.
 
 A booking also copies its end and buffer when it's saved, so making a service longer later doesn't move the appointments that already exist.
 
@@ -187,4 +192,5 @@ The rules don't know about Spring or the database, which is why most of the test
 
 ## What's next
 
-- several professionals, each with their own calendar
+- each professional with their own weekly hours (today they share the place's hours and have their own time away)
+- which services each person does

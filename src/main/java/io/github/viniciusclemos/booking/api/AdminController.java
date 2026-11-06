@@ -70,14 +70,22 @@ public class AdminController {
     @PostMapping("/professionals")
     @ResponseStatus(HttpStatus.CREATED)
     Professional addProfessional(@Valid @RequestBody ProfessionalForm form) {
-        return professionals.find(professionals.create(form.name().trim())).orElseThrow();
+        try {
+            return professionals.find(professionals.create(form.name().trim())).orElseThrow();
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new IllegalArgumentException("There's someone called " + form.name().trim() + " already");
+        }
     }
 
     // someone who leaves is turned off, not deleted: their past bookings still point at them
     @PutMapping("/professionals/{id}")
     Professional updateProfessional(@PathVariable long id, @Valid @RequestBody ProfessionalForm form) {
-        if (!professionals.update(id, form.name().trim(), form.active() == null || form.active())) {
-            throw new NotFound("Professional not found");
+        try {
+            if (!professionals.update(id, form.name().trim(), form.active() == null || form.active())) {
+                throw new NotFound("Professional not found");
+            }
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new IllegalArgumentException("There's someone called " + form.name().trim() + " already");
         }
         return professionals.find(id).orElseThrow();
     }

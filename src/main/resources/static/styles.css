@@ -325,3 +325,17 @@ input[aria-invalid="true"] { border-color: var(--red); }
 }
 
 .who-what .cancelled-stamp { color: var(--red); font-size: 0.88rem; }
+
+/* who: whoever is free, or one barber by name */
+.who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; margin: 0 0 16px; }
+.who-label { font-size: 0.9rem; color: var(--muted); margin-right: 4px; }
+.who-pick {
+  font: inherit; font-size: 0.95rem; color: var(--ink); background: transparent;
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; cursor: pointer;
+}
+.who-pick:hover { border-color: var(--muted); }
+.who-pick[aria-checked="true"] { background: var(--green); border-color: var(--green); color: var(--paper); }
+.team-title { margin-top: 44px; }
+.plain-list li.off .when { color: var(--muted); text-decoration: line-through; }
+#agenda-who { margin: 6px 0 10px; }
+#team .side { display: flex; gap: 14px; justify-content: flex-end; }

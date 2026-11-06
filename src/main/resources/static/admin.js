@@ -2,7 +2,8 @@
 
 const $ = (id) => document.getElementById(id);
 const WEEKDAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-const state = { business: null, date: null, today: null };
+// pro: whose agenda is showing, null for everyone
+const state = { business: null, date: null, today: null, pro: null };
 
 const hhmm = (t) => t.slice(0, 5);
 const minutes = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -176,12 +177,35 @@ function rows(bookings, ranges, away = []) {
   return out;
 }
 
-function render(all, day) {
+const team = () => state.business.professionals;
+
+// with more than one barber the agenda can show one of them, with their free gaps, or everyone
+function renderAgendaWho() {
+  const box = $('agenda-who');
+  box.hidden = team().length < 2;
+  if (box.hidden) return;
+  const pick = (pro, label) => {
+    const button = el('button', {
+      type: 'button', role: 'radio', class: 'who-pick',
+      'aria-checked': String((state.pro?.id ?? null) === (pro?.id ?? null)),
+    }, label);
+    button.addEventListener('click', () => { state.pro = pro; loadDay(state.date); });
+    return button;
+  };
+  box.replaceChildren(pick(null, 'Everyone'), ...team().map((p) => pick(p, p.name)));
+}
+
+function render(everything, day) {
+  renderAgendaWho();
   const ranges = day ? day.ranges : state.business.hours[weekdayOf(state.date)] || [];
-  const away = day ? day.timeOff : [];
+  const mine = (id) => !state.pro || id == null || id === state.pro.id;
+  const all = everything.filter((b) => mine(b.professionalId));
+  const away = (day ? day.timeOff : []).filter((t) => mine(t.professionalId));
   const list = $('agenda');
   const bookings = all.filter((b) => b.status === 'CONFIRMED');
   const cancelled = all.filter((b) => b.status === 'CANCELLED');
+  // free gaps only mean something for one person's day
+  const gaps = !state.pro && team().length > 1 ? false : true;
 
   if (!ranges.length && !all.length) {
     $('agenda-summary').textContent = '';
@@ -190,19 +214,19 @@ function render(all, day) {
   }
 
   const booked = bookings.reduce((sum, b) => sum + minutes(b.ends.slice(11)) - minutes(b.starts.slice(11)), 0);
-  const open = ranges.reduce((sum, r) => sum + minutes(r.end) - minutes(r.start), 0);
+  const open = ranges.reduce((sum, r) => sum + minutes(r.end) - minutes(r.start), 0) * (state.pro ? 1 : Math.max(1, team().length));
   $('agenda-summary').textContent = bookings.length
     ? `${bookings.length} booking${bookings.length === 1 ? '' : 's'} · ${open ? Math.round((100 * booked) / open) : 0}% of the day booked`
     : 'Nothing booked yet.';
   if (cancelled.length) $('agenda-summary').textContent += ` · ${cancelled.length} cancelled`;
 
-  list.replaceChildren(...rows(bookings, ranges, away).map((row) => {
+  list.replaceChildren(...rows(bookings, ranges, away).filter((row) => gaps || !row.free).map((row) => {
     if (row.away) {
       const from = row.away.starts.slice(0, 10) < state.date ? 'Earlier' : hhmm(row.away.starts.slice(11));
       const until = row.away.ends.slice(0, 10) > state.date ? 'the end of the day' : hhmm(row.away.ends.slice(11));
       return el('li', { class: 'away-row' },
         el('span', { class: 'when' }, from),
-        el('span', {}, `Away until ${until}${row.away.reason ? ` · ${row.away.reason}` : ''}`));
+        el('span', {}, `${row.away.professional ? `${row.away.professional} away` : 'Closed'} until ${until}${row.away.reason ? ` · ${row.away.reason}` : ''}`));
     }
     if (row.gap) {
       return el('li', { class: 'break' }, el('span', { class: 'when' }), el('span', {}, `Break, ${clock(row.from)} to ${clock(row.to)}`));
@@ -228,7 +252,8 @@ function render(all, day) {
 function bookingRow(b) {
   const phone = b.clientPhone.replace(/[^\d+]/g, '');
   const isCancelled = b.status === 'CANCELLED';
-  const who = el('span', { class: 'who-what' }, el('b', {}, b.clientName), el('span', {}, b.serviceName));
+  const with_ = team().length > 1 && !state.pro ? ` · with ${b.professionalName}` : '';
+  const who = el('span', { class: 'who-what' }, el('b', {}, b.clientName), el('span', {}, `${b.serviceName}${with_}`));
   if (isCancelled) {
     const by = b.cancelledBy === 'CLIENT' ? 'by the client' : 'by the staff';
     who.append(el('span', { class: 'cancelled-stamp' }, `Cancelled ${by} at ${hhmm(b.cancelledAt.slice(11))}`));

@@ -34,7 +34,66 @@ async function loadServices() {
     return;
   }
   renderServices();
+  loadTeam();
 }
+
+// the team: add someone, rename, turn off and back on
+
+async function loadTeam() {
+  let people;
+  try {
+    people = await api('/api/admin/professionals');
+  } catch (err) {
+    handle401(err);
+    return;
+  }
+  $('team').replaceChildren(...people.map((p) => {
+    const toggle = el('button', { type: 'button', class: 'link small' }, p.active ? 'Turn off' : 'Turn back on');
+    toggle.addEventListener('click', () => saveMember(p.id, { name: p.name, active: !p.active }));
+    const rename = el('button', { type: 'button', class: 'link small' }, 'Rename');
+    rename.addEventListener('click', () => {
+      const name = prompt('New name', p.name);
+      if (name && name.trim() && name.trim() !== p.name) saveMember(p.id, { name: name.trim(), active: p.active });
+    });
+    return el('li', { class: p.active ? '' : 'off' },
+      el('span', { class: 'when' }, p.name),
+      el('span', { class: 'muted' }, p.active ? 'taking clients' : 'turned off'),
+      el('span', { class: 'side' }, rename, toggle));
+  }));
+}
+
+async function saveMember(id, body) {
+  $('team-error').hidden = true;
+  try {
+    await api(`/api/admin/professionals/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  } catch (err) {
+    if (!handle401(err)) fail($('team-error'), err.message);
+    return;
+  }
+  // the booking page and the agenda read the team from here
+  state.business = await api('/api/business');
+  loadTeam();
+}
+
+$('team-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = event.target.name.value.trim();
+  if (!name) return;
+  $('team-error').hidden = true;
+  try {
+    await api('/api/admin/professionals', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+  } catch (err) {
+    if (!handle401(err)) fail($('team-error'), err.message);
+    return;
+  }
+  event.target.reset();
+  state.business = await api('/api/business');
+  loadTeam();
+});
 
 function renderServices(editingId) {
   $('services-admin').replaceChildren(...services.map((s) => (s.id === editingId ? serviceForm(s) : serviceLine(s))));
