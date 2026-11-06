@@ -6,6 +6,8 @@ import io.github.viniciusclemos.booking.scheduling.SchedulingService;
 import io.github.viniciusclemos.booking.scheduling.SchedulingService.DaySummary;
 import io.github.viniciusclemos.booking.store.BookingRow;
 import io.github.viniciusclemos.booking.store.CalendarStore;
+import io.github.viniciusclemos.booking.store.ProfessionalStore;
+import io.github.viniciusclemos.booking.store.ProfessionalStore.Professional;
 import io.github.viniciusclemos.booking.store.ServiceRow;
 import io.github.viniciusclemos.booking.store.ServiceStore;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
@@ -43,29 +45,32 @@ public class PublicController {
     private final ServiceStore services;
     private final CalendarStore calendars;
     private final BookingSettings settings;
+    private final ProfessionalStore professionals;
     // only in the public demo, where the login is meant to be shared
     @Value("${booking.demo:false}")
     private boolean demo;
 
     public PublicController(SchedulingService scheduling, ServiceStore services, CalendarStore calendars,
-                            BookingSettings settings) {
+                            BookingSettings settings, ProfessionalStore professionals) {
         this.scheduling = scheduling;
         this.services = services;
         this.calendars = calendars;
         this.settings = settings;
+        this.professionals = professionals;
     }
 
     public record DemoLogin(String email, String password) {
     }
 
     public record BusinessView(String name, String address, String zone, LocalDateTime now,
-                               Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes, DemoLogin demoLogin) {
+                               Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes,
+                               List<Professional> professionals, DemoLogin demoLogin) {
     }
 
     @GetMapping("/business")
     BusinessView business() {
         return new BusinessView(settings.businessName(), settings.businessAddress(), settings.zone().getId(),
-                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes(),
+                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes(), professionals.active(),
                 demo ? new DemoLogin(DemoData.EMAIL, DemoData.PASSWORD) : null);
     }
 
@@ -79,16 +84,18 @@ public class PublicController {
 
     @GetMapping("/availability")
     SlotsView availability(@RequestParam long serviceId,
-                           @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return new SlotsView(serviceId, date, scheduling.slots(serviceId, date));
+                           @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+                           @RequestParam(required = false) Long professionalId) {
+        return new SlotsView(serviceId, date, scheduling.slots(serviceId, date, professionalId));
     }
 
     @GetMapping("/availability/days")
     List<DaySummary> days(@RequestParam long serviceId,
                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                          @RequestParam(defaultValue = "14") int count) {
+                          @RequestParam(defaultValue = "14") int count,
+                          @RequestParam(required = false) Long professionalId) {
         if (count < 1 || count > 62) throw new IllegalArgumentException("count must be between 1 and 62");
-        return scheduling.days(serviceId, from != null ? from : scheduling.now().toLocalDate(), count);
+        return scheduling.days(serviceId, from != null ? from : scheduling.now().toLocalDate(), count, professionalId);
     }
 
     public record NewBooking(
@@ -96,17 +103,20 @@ public class PublicController {
             @NotNull LocalDateTime start,
             @NotBlank @Size(max = 80) String clientName,
             // digits, spaces and the usual phone symbols; at least 8 digits is checked below
-            @NotBlank @Pattern(regexp = "[0-9 ()+\\-]{8,20}", message = "must be a phone number") String clientPhone) {
+            @NotBlank @Pattern(regexp = "[0-9 ()+\\-]{8,20}", message = "must be a phone number") String clientPhone,
+            // null: anyone who's free at that time
+            Long professionalId) {
     }
 
     // what the client sees of a booking: no phone, and the cancel deadline
-    public record BookingView(long id, long serviceId, String service, String clientName, LocalDateTime starts,
-                              LocalDateTime ends, String status, LocalDateTime cancelUntil, boolean canCancel) {
+    public record BookingView(long id, long serviceId, String service, String professional, String clientName,
+                              LocalDateTime starts, LocalDateTime ends, String status, LocalDateTime cancelUntil,
+                              boolean canCancel) {
     }
 
     private BookingView view(BookingRow row) {
-        return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.clientName(), row.starts(),
-                row.ends(), row.status(), scheduling.cancelDeadline(row), scheduling.clientCanCancel(row));
+        return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.professionalName(), row.clientName(),
+                row.starts(), row.ends(), row.status(), scheduling.cancelDeadline(row), scheduling.clientCanCancel(row));
     }
 
     public record Created(@JsonUnwrapped BookingView booking, String cancelToken) {
@@ -120,7 +130,7 @@ public class PublicController {
             throw new IllegalArgumentException("The phone needs at least 8 digits");
         }
         var booked = scheduling.book(body.serviceId(), body.start().withSecond(0).withNano(0),
-                body.clientName().trim(), phone);
+                body.clientName().trim(), phone, body.professionalId());
         return new Created(view(booked.booking()), booked.cancelToken());
     }
 

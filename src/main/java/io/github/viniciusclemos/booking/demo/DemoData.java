@@ -64,6 +64,11 @@ public class DemoData implements ApplicationRunner {
             service("Hair coloring", "Covers grey or a full color change.", 60, 15, 9000);
             log.info("Demo barbershop created");
         }
+        // three barbers: the one the migration made, renamed, and two more
+        if (db.sql("SELECT count(*) FROM professional").query(Integer.class).single() == 1) {
+            db.sql("UPDATE professional SET name = 'Rui' WHERE name = 'Me'").update();
+            db.sql("INSERT INTO professional (name) VALUES ('Bia'), ('Caio')").update();
+        }
         topUp();
     }
 
@@ -76,16 +81,17 @@ public class DemoData implements ApplicationRunner {
         // whatever services exist now, the staff may have changed them since the start
         List<Offer> offers = db.sql("SELECT id, duration_min, buffer_min FROM service WHERE active ORDER BY id")
                 .query(Offer.class).list();
-        if (offers.isEmpty()) return;
+        List<Long> barbers = db.sql("SELECT id FROM professional WHERE active ORDER BY id").query(Long.class).list();
+        if (offers.isEmpty() || barbers.isEmpty()) return;
         LocalDate today = LocalDate.now(clock);
         for (int d = 0; d < 14; d++) {
             LocalDate date = today.plusDays(d);
             if (date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
             int already = db.sql("SELECT count(*) FROM booking WHERE starts >= ? AND starts < ?")
                     .params(date.atStartOfDay(), date.plusDays(1).atStartOfDay()).query(Integer.class).single();
-            if (already >= 3) continue;
+            if (already >= 3 * barbers.size()) continue;
             int lastHour = date.getDayOfWeek() == DayOfWeek.SATURDAY ? 13 : 18;
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 6 * barbers.size(); i++) {
                 LocalDateTime start = date.atTime(9 + random.nextInt(lastHour - 9), random.nextBoolean() ? 0 : 30);
                 Offer offer = offers.get(random.nextInt(offers.size()));
                 LocalDateTime end = start.plusMinutes(offer.durationMin());
@@ -94,13 +100,16 @@ public class DemoData implements ApplicationRunner {
                 if (start.isBefore(LocalDateTime.now(clock))) continue;
                 if (start.getHour() < 12 && end.isAfter(date.atTime(12, 0))) continue;
                 if (start.getHour() == 12 || end.isAfter(date.atTime(lastHour + 1, 0))) continue;
+                long barber = barbers.get(random.nextInt(barbers.size()));
                 db.sql("""
-                                INSERT INTO booking (service_id, client_name, client_phone, starts, ends, blocked_until)
-                                SELECT ?, ?, ?, ?, ?, ?
+                                INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends,
+                                                     blocked_until)
+                                SELECT ?, ?, ?, ?, ?, ?, ?
                                 WHERE NOT EXISTS (SELECT 1 FROM booking
-                                                  WHERE status = 'CONFIRMED' AND tsrange(starts, blocked_until) && tsrange(?, ?))""")
-                        .params(offer.id(), NAMES[random.nextInt(NAMES.length)],
-                                "119" + (10000000 + random.nextInt(89999999)), start, end, blocked, start, blocked)
+                                                  WHERE status = 'CONFIRMED' AND professional_id = ?
+                                                    AND tsrange(starts, blocked_until) && tsrange(?, ?))""")
+                        .params(offer.id(), barber, NAMES[random.nextInt(NAMES.length)],
+                                "119" + (10000000 + random.nextInt(89999999)), start, end, blocked, barber, start, blocked)
                         .update();
             }
         }

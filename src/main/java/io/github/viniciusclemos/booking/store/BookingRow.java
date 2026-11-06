@@ -6,7 +6,8 @@ import io.github.viniciusclemos.booking.domain.ServiceOffering;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
-public record BookingRow(long id, long serviceId, String serviceName, String clientName, String clientPhone,
+public record BookingRow(long id, long serviceId, String serviceName, long professionalId, String professionalName,
+                         String clientName, String clientPhone,
                          LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil, String status,
                          LocalDateTime cancelledAt, String cancelledBy) {
 

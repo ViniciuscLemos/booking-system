@@ -55,7 +55,10 @@ class ApiTest {
 
     @BeforeEach
     void barbershop() throws Exception {
-        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off RESTART IDENTITY CASCADE").update();
+        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, professional RESTART IDENTITY CASCADE")
+                .update();
+        // one barber unless a test adds more, like a place that just opened
+        db.sql("INSERT INTO professional (name) VALUES ('Rui')").update();
         send(put("/api/admin/hours"), """
                 {"MONDAY": [{"start":"09:00","end":"12:00"},{"start":"13:00","end":"18:00"}],
                  "TUESDAY": [{"start":"09:00","end":"12:00"},{"start":"13:00","end":"18:00"}],
@@ -229,16 +232,67 @@ class ApiTest {
     @Test
     void theDatabaseRefusesOverlapsEvenWithoutTheRules() {
         LocalDateTime ten = LocalDateTime.of(2026, 11, 3, 10, 0);
-        calendars.insertBooking(haircut, "Ana", "1", ten, ten.plusMinutes(30), ten.plusMinutes(40));
-        assertThatThrownBy(() -> calendars.insertBooking(haircut, "Bia", "2", ten.plusMinutes(35),
+        calendars.insertBooking(haircut, 1, "Ana", "1", ten, ten.plusMinutes(30), ten.plusMinutes(40));
+        assertThatThrownBy(() -> calendars.insertBooking(haircut, 1, "Bia", "2", ten.plusMinutes(35),
                 ten.plusMinutes(65), ten.plusMinutes(75)))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("booking_no_overlap");
         // back to back is fine: [10:00, 10:40) and [10:40, ...)
-        calendars.insertBooking(haircut, "Caio", "3", ten.plusMinutes(40), ten.plusMinutes(70), ten.plusMinutes(80));
+        calendars.insertBooking(haircut, 1, "Caio", "3", ten.plusMinutes(40), ten.plusMinutes(70), ten.plusMinutes(80));
         // and a cancelled booking frees its time
         db.sql("UPDATE booking SET status = 'CANCELLED' WHERE client_name = 'Ana'").update();
-        calendars.insertBooking(haircut, "Duda", "4", ten, ten.plusMinutes(30), ten.plusMinutes(40));
+        calendars.insertBooking(haircut, 1, "Duda", "4", ten, ten.plusMinutes(30), ten.plusMinutes(40));
+        // the same time with someone else was never a problem
+        db.sql("INSERT INTO professional (name) VALUES ('Bia')").update();
+        calendars.insertBooking(haircut, 2, "Eva", "5", ten, ten.plusMinutes(30), ten.plusMinutes(40));
+    }
+
+    ResultActions bookWith(String start, Long professionalId, String client) throws Exception {
+        return send(post("/api/bookings"), """
+                {"serviceId":%d,"start":"%s","clientName":"%s","clientPhone":"(11) 98888-7777","professionalId":%s}"""
+                .formatted(haircut, start, client, professionalId));
+    }
+
+    @Test
+    void twoBarbersTakeTwoClientsAtTheSameTime() throws Exception {
+        send(post("/api/admin/professionals"), "{\"name\":\"Bia\"}").andExpect(status().isCreated());
+
+        bookWith("2026-11-03T10:00", 1L, "Ana").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.professional").value("Rui"));
+        // Rui is taken at 10:00, so "anyone" goes to Bia
+        bookWith("2026-11-03T10:00", null, "Duda").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.professional").value("Bia"));
+        // now nobody is free at 10:00, with or without a name
+        bookWith("2026-11-03T10:00", null, "Caio").andExpect(status().isConflict());
+        bookWith("2026-11-03T10:00", 2L, "Caio").andExpect(status().isConflict());
+
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03"))
+                .andExpect(jsonPath("$.slots", not(hasItem("10:00:00"))));
+    }
+
+    @Test
+    void anyoneSpreadsTheDayAndAskingForSomeoneShowsOnlyTheirTimes() throws Exception {
+        send(post("/api/admin/professionals"), "{\"name\":\"Bia\"}").andExpect(status().isCreated());
+        // the first goes to Rui (nobody has anything yet), the next one to Bia, who has less
+        bookWith("2026-11-03T09:00", null, "Ana").andExpect(jsonPath("$.professional").value("Rui"));
+        bookWith("2026-11-03T14:00", null, "Duda").andExpect(jsonPath("$.professional").value("Bia"));
+
+        // Bia away in the afternoon: her own times go, "anyone" still has Rui's
+        send(post("/api/admin/time-off"), """
+                {"starts":"2026-11-03T13:00","ends":"2026-11-03T18:00","reason":"Dentist","professionalId":2}""")
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03").param("professionalId", "2"))
+                .andExpect(jsonPath("$.slots", not(hasItem("15:00:00"))))
+                .andExpect(jsonPath("$.slots", hasItem("10:00:00")));
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03"))
+                .andExpect(jsonPath("$.slots", hasItem("15:00:00")));
+
+        // someone who left isn't offered anymore, but their old bookings stay
+        send(put("/api/admin/professionals/2"), "{\"name\":\"Bia\",\"active\":false}").andExpect(status().isOk());
+        mvc.perform(get("/api/business")).andExpect(jsonPath("$.professionals", hasSize(1)));
+        bookWith("2026-11-03T10:00", 2L, "Caio").andExpect(status().isNotFound());
+        mvc.perform(get("/api/admin/bookings").param("date", "2026-11-03").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$", hasSize(2)));
     }
 
     @Test

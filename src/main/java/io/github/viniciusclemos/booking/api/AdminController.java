@@ -6,6 +6,8 @@ import io.github.viniciusclemos.booking.scheduling.NotFound;
 import io.github.viniciusclemos.booking.scheduling.SchedulingService;
 import io.github.viniciusclemos.booking.store.BookingRow;
 import io.github.viniciusclemos.booking.store.CalendarStore;
+import io.github.viniciusclemos.booking.store.ProfessionalStore;
+import io.github.viniciusclemos.booking.store.ProfessionalStore.Professional;
 import io.github.viniciusclemos.booking.store.ServiceRow;
 import io.github.viniciusclemos.booking.store.ServiceStore;
 import jakarta.validation.Valid;
@@ -47,11 +49,37 @@ public class AdminController {
     private final ServiceStore services;
     private final CalendarStore calendars;
     private final SchedulingService scheduling;
+    private final ProfessionalStore professionals;
 
-    public AdminController(ServiceStore services, CalendarStore calendars, SchedulingService scheduling) {
+    public AdminController(ServiceStore services, CalendarStore calendars, SchedulingService scheduling,
+                           ProfessionalStore professionals) {
         this.services = services;
         this.calendars = calendars;
         this.scheduling = scheduling;
+        this.professionals = professionals;
+    }
+
+    public record ProfessionalForm(@NotBlank @Size(max = 60) String name, Boolean active) {
+    }
+
+    @GetMapping("/professionals")
+    List<Professional> professionals() {
+        return professionals.all();
+    }
+
+    @PostMapping("/professionals")
+    @ResponseStatus(HttpStatus.CREATED)
+    Professional addProfessional(@Valid @RequestBody ProfessionalForm form) {
+        return professionals.find(professionals.create(form.name().trim())).orElseThrow();
+    }
+
+    // someone who leaves is turned off, not deleted: their past bookings still point at them
+    @PutMapping("/professionals/{id}")
+    Professional updateProfessional(@PathVariable long id, @Valid @RequestBody ProfessionalForm form) {
+        if (!professionals.update(id, form.name().trim(), form.active() == null || form.active())) {
+            throw new NotFound("Professional not found");
+        }
+        return professionals.find(id).orElseThrow();
     }
 
     public record ServiceForm(
@@ -133,10 +161,9 @@ public class AdminController {
     /** The hours of one date (special or the usual weekday) and the time off on it, for the agenda. */
     @GetMapping("/day")
     Map<String, Object> day(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        var calendar = calendars.load(date, date, scheduling.policy());
         var away = calendars.timeOffFrom(date.atStartOfDay()).stream()
                 .filter(t -> t.starts().isBefore(date.plusDays(1).atStartOfDay())).toList();
-        return Map.of("ranges", calendar.schedule().rangesOn(date), "timeOff", away);
+        return Map.of("ranges", calendars.schedule(date, date).rangesOn(date), "timeOff", away);
     }
 
     @DeleteMapping("/time-off/{id}")
@@ -145,14 +172,19 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
-    public record TimeOffForm(@NotNull LocalDateTime starts, @NotNull LocalDateTime ends, @Size(max = 200) String reason) {
+    /** professionalId null: the whole place is closed (a holiday). */
+    public record TimeOffForm(@NotNull LocalDateTime starts, @NotNull LocalDateTime ends, @Size(max = 200) String reason,
+                              Long professionalId) {
     }
 
     @PostMapping("/time-off")
     @ResponseStatus(HttpStatus.CREATED)
     Map<String, Long> timeOff(@Valid @RequestBody TimeOffForm form) {
         if (!form.starts().isBefore(form.ends())) throw new IllegalArgumentException("starts must be before ends");
-        return Map.of("id", calendars.addTimeOff(form.starts(), form.ends(), form.reason()));
+        if (form.professionalId() != null && professionals.find(form.professionalId()).isEmpty()) {
+            throw new NotFound("Professional not found");
+        }
+        return Map.of("id", calendars.addTimeOff(form.starts(), form.ends(), form.reason(), form.professionalId()));
     }
 
     // cancelled ones too, so the staff knows that slot opened up and why

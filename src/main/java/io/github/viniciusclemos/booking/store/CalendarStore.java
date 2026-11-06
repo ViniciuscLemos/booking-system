@@ -30,10 +30,11 @@ public class CalendarStore {
     }
 
     /**
-     * The calendar between two dates (both included), in a handful of queries, so
-     * looking at two weeks of availability doesn't mean one query per day.
+     * One professional's calendar between two dates (both included), in a handful of
+     * queries, so looking at two weeks of availability doesn't mean one query per day.
+     * The hours are the place's; the time off is theirs plus the place's own (holidays).
      */
-    public Calendar load(LocalDate from, LocalDate to, BookingPolicy policy) {
+    public Calendar load(LocalDate from, LocalDate to, BookingPolicy policy, long professionalId) {
         WeeklySchedule schedule = new WeeklySchedule();
         weeklyHours().forEach((day, ranges) -> schedule.on(day, ranges.toArray(TimeRange[]::new)));
         overrides(from, to).forEach((date, ranges) -> schedule.onDate(date, ranges.toArray(TimeRange[]::new)));
@@ -41,12 +42,26 @@ public class CalendarStore {
         // one extra day at the end, for a buffer that runs past midnight
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(2).atStartOfDay();
-        List<Interval> timeOff = db.sql("SELECT starts, ends FROM time_off WHERE starts < ? AND ends > ?")
-                .params(end, start)
+        List<Interval> timeOff = db.sql("""
+                        SELECT starts, ends FROM time_off
+                        WHERE starts < ? AND ends > ? AND (professional_id IS NULL OR professional_id = ?)""")
+                .params(end, start, professionalId)
                 .query((rs, n) -> new Interval(rs.getObject(1, LocalDateTime.class), rs.getObject(2, LocalDateTime.class)))
                 .list();
-        var bookings = confirmedBetween(start, end).stream().map(BookingRow::toBooking).toList();
+        var bookings = db.sql(BOOKING_SELECT
+                        + " WHERE b.status = 'CONFIRMED' AND b.professional_id = ? AND b.starts < ? AND b.blocked_until > ?"
+                        + " ORDER BY b.starts")
+                .params(professionalId, end, start).query(BookingRow.class).list()
+                .stream().map(BookingRow::toBooking).toList();
         return new Calendar(schedule, timeOff, bookings, policy);
+    }
+
+    /** Only the place's hours for a range of dates, with nobody's bookings in it. */
+    public WeeklySchedule schedule(LocalDate from, LocalDate to) {
+        WeeklySchedule schedule = new WeeklySchedule();
+        weeklyHours().forEach((day, ranges) -> schedule.on(day, ranges.toArray(TimeRange[]::new)));
+        overrides(from, to).forEach((date, ranges) -> schedule.onDate(date, ranges.toArray(TimeRange[]::new)));
+        return schedule;
     }
 
     public Map<DayOfWeek, List<TimeRange>> weeklyHours() {
@@ -82,19 +97,33 @@ public class CalendarStore {
         return db.sql(BOOKING_SELECT + " WHERE b.id = ?").param(id).query(BookingRow.class).optional();
     }
 
-    public long insertBooking(long serviceId, String clientName, String clientPhone, LocalDateTime starts,
-                              LocalDateTime ends, LocalDateTime blockedUntil) {
-        return insertBooking(serviceId, clientName, clientPhone, starts, ends, blockedUntil, null);
+    public long insertBooking(long serviceId, long professionalId, String clientName, String clientPhone,
+                              LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil) {
+        return insertBooking(serviceId, professionalId, clientName, clientPhone, starts, ends, blockedUntil, null);
     }
 
-    public long insertBooking(long serviceId, String clientName, String clientPhone, LocalDateTime starts,
-                              LocalDateTime ends, LocalDateTime blockedUntil, String cancelTokenHash) {
+    public long insertBooking(long serviceId, long professionalId, String clientName, String clientPhone,
+                              LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil,
+                              String cancelTokenHash) {
         return db.sql("""
-                        INSERT INTO booking (service_id, client_name, client_phone, starts, ends, blocked_until,
-                                             cancel_token_hash)
-                        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id""")
-                .params(serviceId, clientName, clientPhone, starts, ends, blockedUntil, cancelTokenHash)
+                        INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends,
+                                             blocked_until, cancel_token_hash)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""")
+                .params(serviceId, professionalId, clientName, clientPhone, starts, ends, blockedUntil, cancelTokenHash)
                 .query(Long.class).single();
+    }
+
+    /** How many confirmed bookings each person has on a day, to spread "anyone" bookings out. */
+    public Map<Long, Integer> loadOn(LocalDate day) {
+        Map<Long, Integer> load = new LinkedHashMap<>();
+        db.sql("""
+                        SELECT professional_id, count(*) FROM booking
+                        WHERE status = 'CONFIRMED' AND starts >= ? AND starts < ? GROUP BY professional_id""")
+                .params(day.atStartOfDay(), day.plusDays(1).atStartOfDay())
+                .query(rs -> {
+                    load.put(rs.getLong(1), rs.getInt(2));
+                });
+        return load;
     }
 
     public Optional<BookingRow> findByCancelToken(String tokenHash) {
@@ -138,12 +167,17 @@ public class CalendarStore {
         return db.sql("DELETE FROM date_override WHERE day = ?").param(date).update() > 0;
     }
 
-    public record TimeOff(long id, LocalDateTime starts, LocalDateTime ends, String reason) {
+    /** professionalId and professional are null when it's the whole place that's closed. */
+    public record TimeOff(long id, LocalDateTime starts, LocalDateTime ends, String reason, Long professionalId,
+                          String professional) {
     }
 
     /** Time off that hasn't ended yet, soonest first. */
     public List<TimeOff> timeOffFrom(LocalDateTime from) {
-        return db.sql("SELECT id, starts, ends, reason FROM time_off WHERE ends > ? ORDER BY starts")
+        return db.sql("""
+                        SELECT t.id, t.starts, t.ends, t.reason, t.professional_id, p.name AS professional
+                        FROM time_off t LEFT JOIN professional p ON p.id = t.professional_id
+                        WHERE t.ends > ? ORDER BY t.starts""")
                 .param(from).query(TimeOff.class).list();
     }
 
@@ -151,13 +185,14 @@ public class CalendarStore {
         return db.sql("DELETE FROM time_off WHERE id = ?").param(id).update() == 1;
     }
 
-    public long addTimeOff(LocalDateTime starts, LocalDateTime ends, String reason) {
-        return db.sql("INSERT INTO time_off (starts, ends, reason) VALUES (?, ?, ?) RETURNING id")
-                .params(starts, ends, reason).query(Long.class).single();
+    public long addTimeOff(LocalDateTime starts, LocalDateTime ends, String reason, Long professionalId) {
+        return db.sql("INSERT INTO time_off (starts, ends, reason, professional_id) VALUES (?, ?, ?, ?) RETURNING id")
+                .params(starts, ends, reason, professionalId).query(Long.class).single();
     }
 
     private static final String BOOKING_SELECT = """
-            SELECT b.id, b.service_id, s.name AS service_name, b.client_name, b.client_phone,
-                   b.starts, b.ends, b.blocked_until, b.status, b.cancelled_at, b.cancelled_by
-            FROM booking b JOIN service s ON s.id = b.service_id""";
+            SELECT b.id, b.service_id, s.name AS service_name, b.professional_id, p.name AS professional_name,
+                   b.client_name, b.client_phone, b.starts, b.ends, b.blocked_until, b.status, b.cancelled_at,
+                   b.cancelled_by
+            FROM booking b JOIN service s ON s.id = b.service_id JOIN professional p ON p.id = b.professional_id""";
 }
