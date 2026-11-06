@@ -105,8 +105,13 @@ async function pickService(service) {
 const withPro = () => (state.pro ? `&professionalId=${state.pro.id}` : '');
 
 // only when there's more than one person to pick from
+// whoever does the service picked (an empty list of services means all of them)
+const doing = () => state.business.professionals
+  .filter((p) => !p.services.length || p.services.includes(state.service.id));
+
 function renderWho() {
-  const pros = state.business.professionals;
+  const pros = doing();
+  if (state.pro && !pros.some((p) => p.id === state.pro.id)) state.pro = null;
   $('who').hidden = pros.length < 2;
   if (pros.length < 2) return;
   const choice = (pro, label) => el('button', {
@@ -269,7 +274,7 @@ function showDone(booking) {
   $('done-title').textContent = `See you ${formatDate(date, { weekday: 'long' })}, ${booking.clientName.split(' ')[0]}.`;
   const rows = [
     ['Service', booking.service],
-    ...(state.business.professionals.length > 1 ? [['With', booking.professional]] : []),
+    ...(doing().length > 1 ? [['With', booking.professional]] : []),
     ['When', `${formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}, ${start}–${end}`],
     ['Where', state.business.address],
     ['Booking', `#${booking.id}`],

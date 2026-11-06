@@ -53,7 +53,7 @@ public class SchedulingService {
         ServiceRow service = activeService(serviceId);
         LocalDateTime now = now();
         TreeSet<LocalTime> free = new TreeSet<>();
-        for (Professional who : who(professionalId)) {
+        for (Professional who : who(professionalId, serviceId)) {
             Calendar calendar = calendars.load(date, date, settings.policy(), who.id());
             free.addAll(Availability.freeSlots(calendar, service.toOffering(), date, now));
         }
@@ -71,7 +71,7 @@ public class SchedulingService {
     public List<DaySummary> days(long serviceId, LocalDate from, int count, Long professionalId) {
         ServiceRow service = activeService(serviceId);
         LocalDate to = from.plusDays(count - 1);
-        List<Calendar> each = who(professionalId).stream()
+        List<Calendar> each = who(professionalId, serviceId).stream()
                 .map(p -> calendars.load(from, to, settings.policy(), p.id())).toList();
         var schedule = calendars.schedule(from, to);
         LocalDateTime now = now();
@@ -101,7 +101,7 @@ public class SchedulingService {
     public Booked book(long serviceId, LocalDateTime start, String clientName, String clientPhone, Long professionalId) {
         ServiceRow service = activeService(serviceId);
         Booking wanted = new Booking(service.toOffering(), start);
-        List<Professional> candidates = new ArrayList<>(who(professionalId));
+        List<Professional> candidates = new ArrayList<>(who(professionalId, serviceId));
         Map<Long, Integer> load = calendars.loadOn(start.toLocalDate());
         candidates.sort(Comparator.comparingInt((Professional p) -> load.getOrDefault(p.id(), 0)).thenComparingLong(Professional::id));
 
@@ -131,11 +131,16 @@ public class SchedulingService {
         return book(serviceId, start, clientName, clientPhone, null);
     }
 
-    /** One person (who has to be taking bookings), or everyone who is. */
-    private List<Professional> who(Long professionalId) {
-        if (professionalId == null) return professionals.active();
-        return List.of(professionals.find(professionalId).filter(Professional::active)
-                .orElseThrow(() -> new NotFound("Professional not found")));
+    /** One person (taking bookings and doing this service), or everyone who does it. */
+    private List<Professional> who(Long professionalId, long serviceId) {
+        List<Professional> doing = professionals.doing(serviceId);
+        if (professionalId == null) return doing;
+        Professional one = professionals.find(professionalId).filter(Professional::active)
+                .orElseThrow(() -> new NotFound("Professional not found"));
+        if (doing.stream().noneMatch(p -> p.id() == one.id())) {
+            throw new NotFound(one.name() + " doesn't do this service");
+        }
+        return List.of(one);
     }
 
     public BookingRow booking(long id) {

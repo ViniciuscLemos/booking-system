@@ -68,6 +68,11 @@ public class DemoData implements ApplicationRunner {
         if (db.sql("SELECT count(*) FROM professional").query(Integer.class).single() == 1) {
             db.sql("UPDATE professional SET name = 'Rui' WHERE name = 'Me'").update();
             db.sql("INSERT INTO professional (name) VALUES ('Bia'), ('Caio')").update();
+            // Caio is new and doesn't do coloring yet; the other two do everything
+            db.sql("""
+                    INSERT INTO professional_service (professional_id, service_id)
+                    SELECT p.id, s.id FROM professional p, service s WHERE p.name = 'Caio' AND s.name <> 'Hair coloring'""")
+                    .update();
         }
         topUp();
     }
@@ -101,6 +106,12 @@ public class DemoData implements ApplicationRunner {
                 if (start.getHour() < 12 && end.isAfter(date.atTime(12, 0))) continue;
                 if (start.getHour() == 12 || end.isAfter(date.atTime(lastHour + 1, 0))) continue;
                 long barber = barbers.get(random.nextInt(barbers.size()));
+                // only someone who does that service
+                boolean does = db.sql("""
+                                SELECT NOT EXISTS (SELECT 1 FROM professional_service WHERE professional_id = ?)
+                                    OR EXISTS (SELECT 1 FROM professional_service WHERE professional_id = ? AND service_id = ?)""")
+                        .params(barber, barber, offer.id()).query(Boolean.class).single();
+                if (!does) continue;
                 db.sql("""
                                 INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends,
                                                      blocked_until)

@@ -62,9 +62,25 @@ public class AdminController {
     public record ProfessionalForm(@NotBlank @Size(max = 60) String name, Boolean active) {
     }
 
+    public record TeamMember(long id, String name, boolean active, List<Long> services) {
+    }
+
     @GetMapping("/professionals")
-    List<Professional> professionals() {
-        return professionals.all();
+    List<TeamMember> professionals() {
+        var services = professionals.servicesOf();
+        return professionals.all().stream()
+                .map(p -> new TeamMember(p.id(), p.name(), p.active(), services.getOrDefault(p.id(), List.of()))).toList();
+    }
+
+    /** The services this person does; an empty list goes back to "all of them". */
+    @PutMapping("/professionals/{id}/services")
+    List<Long> professionalServices(@PathVariable long id, @RequestBody List<Long> serviceIds) {
+        if (professionals.find(id).isEmpty()) throw new NotFound("Professional not found");
+        for (long serviceId : serviceIds) {
+            if (services.findById(serviceId).isEmpty()) throw new NotFound("Service not found");
+        }
+        professionals.setServices(id, serviceIds.stream().distinct().toList());
+        return professionals.servicesOf().getOrDefault(id, List.of());
     }
 
     @PostMapping("/professionals")

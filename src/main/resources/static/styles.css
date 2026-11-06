@@ -339,3 +339,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .plain-list li.off .when { color: var(--muted); text-decoration: line-through; }
 #agenda-who { margin: 6px 0 10px; }
 #team .side { display: flex; gap: 14px; justify-content: flex-end; }
+.team-services { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 0 14px; }
+.team-services[hidden] { display: none; }
+.plain-list li.team-services { display: flex; grid-template-columns: none; }
+.team-services label.check { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }

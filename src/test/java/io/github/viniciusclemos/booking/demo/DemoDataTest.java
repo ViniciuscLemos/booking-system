@@ -29,7 +29,8 @@ class DemoDataTest {
     @Test
     void theDemoIsReadyToUse() throws Exception {
         // the embedded database is shared with the other tests, so start this one clean
-        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, staff, professional RESTART IDENTITY CASCADE")
+        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, staff, professional, professional_service"
+                        + " RESTART IDENTITY CASCADE")
                 .update();
         // the one the migration leaves behind
         db.sql("INSERT INTO professional (name) VALUES ('Me')").update();

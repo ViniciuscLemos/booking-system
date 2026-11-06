@@ -47,19 +47,52 @@ async function loadTeam() {
     handle401(err);
     return;
   }
-  $('team').replaceChildren(...people.map((p) => {
-    const toggle = el('button', { type: 'button', class: 'link small' }, p.active ? 'Turn off' : 'Turn back on');
-    toggle.addEventListener('click', () => saveMember(p.id, { name: p.name, active: !p.active }));
-    const rename = el('button', { type: 'button', class: 'link small' }, 'Rename');
-    rename.addEventListener('click', () => {
-      const name = prompt('New name', p.name);
-      if (name && name.trim() && name.trim() !== p.name) saveMember(p.id, { name: name.trim(), active: p.active });
+  const active = services.filter((s) => s.active);
+  $('team').replaceChildren(...people.flatMap((p) => {
+    const does = p.services.length ? active.filter((s) => p.services.includes(s.id)).map((s) => s.name).join(', ') : 'every service';
+    const pick = el('button', { type: 'button', class: 'link small' }, 'Services');
+    const choices = el('li', { class: 'team-services', hidden: true },
+      ...active.map((s) => {
+        const box = el('input', { type: 'checkbox', value: String(s.id) });
+        box.checked = !p.services.length || p.services.includes(s.id);
+        return el('label', { class: 'check' }, box, ` ${s.name}`);
+      }));
+    const save = el('button', { type: 'button', class: 'confirm small-btn' }, 'Save');
+    save.addEventListener('click', async () => {
+      const ids = [...choices.querySelectorAll('input:checked')].map((b) => Number(b.value));
+      // every box ticked is the same as "does everything": stored as an empty list
+      const body = ids.length === active.length ? [] : ids;
+      if (!body.length && ids.length === 0) return fail($('team-error'), 'Tick at least one service, or turn this person off.');
+      try {
+        await api(`/api/admin/professionals/${p.id}/services`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+      } catch (err) {
+        if (!handle401(err)) fail($('team-error'), err.message);
+        return;
+      }
+      state.business = await api('/api/business');
+      loadTeam();
     });
-    return el('li', { class: p.active ? '' : 'off' },
-      el('span', { class: 'when' }, p.name),
-      el('span', { class: 'muted' }, p.active ? 'taking clients' : 'turned off'),
-      el('span', { class: 'side' }, rename, toggle));
+    choices.append(save);
+    pick.addEventListener('click', () => { choices.hidden = !choices.hidden; });
+    const row = teamRow(p, does, pick);
+    return [row, choices];
   }));
+}
+
+function teamRow(p, does, pick) {
+  const toggle = el('button', { type: 'button', class: 'link small' }, p.active ? 'Turn off' : 'Turn back on');
+  toggle.addEventListener('click', () => saveMember(p.id, { name: p.name, active: !p.active }));
+  const rename = el('button', { type: 'button', class: 'link small' }, 'Rename');
+  rename.addEventListener('click', () => {
+    const name = prompt('New name', p.name);
+    if (name && name.trim() && name.trim() !== p.name) saveMember(p.id, { name: name.trim(), active: p.active });
+  });
+  return el('li', { class: p.active ? '' : 'off' },
+    el('span', { class: 'when' }, p.name),
+    el('span', { class: 'muted' }, p.active ? does : 'turned off'),
+    el('span', { class: 'side' }, pick, rename, toggle));
 }
 
 async function saveMember(id, body) {

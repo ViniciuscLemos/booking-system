@@ -55,7 +55,7 @@ class ApiTest {
 
     @BeforeEach
     void barbershop() throws Exception {
-        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, professional RESTART IDENTITY CASCADE")
+        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, professional, professional_service RESTART IDENTITY CASCADE")
                 .update();
         // one barber unless a test adds more, like a place that just opened
         db.sql("INSERT INTO professional (name) VALUES ('Rui')").update();
@@ -268,6 +268,31 @@ class ApiTest {
 
         mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03"))
                 .andExpect(jsonPath("$.slots", not(hasItem("10:00:00"))));
+    }
+
+    @Test
+    void onlyWhoDoesTheServiceIsOffered() throws Exception {
+        send(post("/api/admin/professionals"), "{\"name\":\"Bia\"}").andExpect(status().isCreated());
+        send(post("/api/admin/services"), """
+                {"name":"Hair coloring","durationMin":60,"priceCents":9000}""").andExpect(status().isCreated());
+        // Bia only colors, Rui only cuts
+        send(put("/api/admin/professionals/2/services"), "[2]").andExpect(status().isOk());
+        send(put("/api/admin/professionals/1/services"), "[1]").andExpect(status().isOk());
+
+        mvc.perform(get("/api/business"))
+                .andExpect(jsonPath("$.professionals[1].services", contains(2)));
+        // a haircut with Bia: she doesn't do it
+        bookWith("2026-11-03T10:00", 2L, "Ana").andExpect(status().isNotFound());
+        // coloring with anyone goes to her, the only one who does it
+        send(post("/api/bookings"), """
+                {"serviceId":2,"start":"2026-11-03T10:00","clientName":"Ana","clientPhone":"(11) 98888-7777"}""")
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.professional").value("Bia"));
+        // and once she's booked at 10:00, nobody else is offered for coloring then
+        mvc.perform(get("/api/availability").param("serviceId", "2").param("date", "2026-11-03"))
+                .andExpect(jsonPath("$.slots", not(hasItem("10:00:00"))));
+        // back to "all of them"
+        send(put("/api/admin/professionals/2/services"), "[]").andExpect(status().isOk());
+        bookWith("2026-11-03T11:00", 2L, "Duda").andExpect(status().isCreated());
     }
 
     @Test

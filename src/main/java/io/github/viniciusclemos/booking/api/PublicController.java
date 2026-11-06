@@ -64,14 +64,24 @@ public class PublicController {
 
     public record BusinessView(String name, String address, String zone, LocalDateTime now,
                                Map<DayOfWeek, List<TimeRange>> hours, long minNoticeMinutes,
-                               List<Professional> professionals, DemoLogin demoLogin) {
+                               List<ProfessionalView> professionals, DemoLogin demoLogin) {
+    }
+
+    /** services empty: does all of them. */
+    public record ProfessionalView(long id, String name, List<Long> services) {
     }
 
     @GetMapping("/business")
     BusinessView business() {
         return new BusinessView(settings.businessName(), settings.businessAddress(), settings.zone().getId(),
-                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes(), professionals.active(),
+                scheduling.now(), calendars.weeklyHours(), settings.minNotice().toMinutes(), team(),
                 demo ? new DemoLogin(DemoData.EMAIL, DemoData.PASSWORD) : null);
+    }
+
+    private List<ProfessionalView> team() {
+        var services = professionals.servicesOf();
+        return professionals.active().stream()
+                .map(p -> new ProfessionalView(p.id(), p.name(), services.getOrDefault(p.id(), List.of()))).toList();
     }
 
     @GetMapping("/services")

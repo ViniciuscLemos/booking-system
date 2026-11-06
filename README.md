@@ -56,7 +56,7 @@ The other two tabs are for setting things up: services (name, duration, the clea
 
 The last tab is for days off: a special date (closed, or open at other hours, like a short Christmas Eve) and time away during a day (the dentist at 14:00). Clients stop seeing those times right away. Bookings that were already made aren't moved or cancelled behind anyone's back: the page says how many are in the way, and the agenda marks them so the staff can call those clients.
 
-With a team, time away is for one person or for the whole place, and the agenda has a row to see everyone's bookings (each with the barber's name) or one person's day with their free gaps. The team itself is on the services tab: add someone, rename, or turn off whoever left (their old bookings keep their name).
+With a team, time away is for one person or for the whole place, and the agenda has a row to see everyone's bookings (each with the barber's name) or one person's day with their free gaps. The team itself is on the services tab: add someone, rename, pick which services they do (nothing picked means all of them, so a new barber who doesn't color yet just isn't offered for coloring), or turn off whoever left (their old bookings keep their name).
 
 <p>
   <img src="docs/staff-days.png" alt="The days off tab: special dates and time away, each with a form to add one" width="420">
@@ -193,4 +193,3 @@ The rules don't know about Spring or the database, which is why most of the test
 ## What's next
 
 - each professional with their own weekly hours (today they share the place's hours and have their own time away)
-- which services each person does
