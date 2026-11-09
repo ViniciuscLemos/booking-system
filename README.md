@@ -58,6 +58,10 @@ The last tab is for days off: a special date (closed, or open at other hours, li
 
 With a team, time away is for one person or for the whole place, and the agenda has a row to see everyone's bookings (each with the barber's name) or one person's day with their free gaps. The team itself is on the services tab: add someone, rename, pick which services they do (nothing picked means all of them, so a new barber who doesn't color yet just isn't offered for coloring), or turn off whoever left (their old bookings keep their name).
 
+Each person can also have their own week. Bia only works afternoons, Tuesday to Saturday: tick her days and the hours, and that's what clients see when they pick her. "Whoever is free" also leaves her out on a Monday morning. Her hours sit inside the place's, never past them, so a holiday still closes the place for everyone and the lunch break still applies. Someone with no hours of their own works whenever the place is open, like before.
+
+<img src="docs/staff-team-hours.png" alt="The team on the services tab: Rui does every service, Bia works Tuesday to Saturday from 13:00 to 19:00 with her week open for editing, Caio does everything except coloring" width="560">
+
 <p>
   <img src="docs/staff-days.png" alt="The days off tab: special dates and time away, each with a form to add one" width="420">
   <img src="docs/staff-agenda-away.png" alt="The agenda with the time away and a booking inside it marked to call the client" width="420">
@@ -145,7 +149,7 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, and the day's bookings. Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
@@ -192,4 +196,5 @@ The rules don't know about Spring or the database, which is why most of the test
 
 ## What's next
 
-- each professional with their own weekly hours (today they share the place's hours and have their own time away)
+- a reminder to the client the day before, with the cancel link
+- the client seeing their own bookings from the phone number, without an account
