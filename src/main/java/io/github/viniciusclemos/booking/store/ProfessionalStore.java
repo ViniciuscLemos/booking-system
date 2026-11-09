@@ -1,13 +1,17 @@
 package io.github.viniciusclemos.booking.store;
 
+import io.github.viniciusclemos.booking.domain.TimeRange;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 @Repository
 public class ProfessionalStore {
@@ -62,6 +66,31 @@ public class ProfessionalStore {
             db.sql("INSERT INTO professional_service (professional_id, service_id) VALUES (?, ?)")
                     .params(professionalId, id).update();
         }
+    }
+
+    /** Each person's own week; someone missing from the map works the place's hours. */
+    public Map<Long, Map<DayOfWeek, List<TimeRange>>> hours() {
+        Map<Long, Map<DayOfWeek, List<TimeRange>>> map = new LinkedHashMap<>();
+        db.sql("SELECT professional_id, day_of_week, starts, ends FROM professional_hours ORDER BY professional_id, day_of_week, starts")
+                .query(rs -> {
+                    map.computeIfAbsent(rs.getLong(1), k -> new TreeMap<>())
+                            .computeIfAbsent(DayOfWeek.of(rs.getInt(2)), d -> new ArrayList<>())
+                            .add(new TimeRange(rs.getObject(3, LocalTime.class), rs.getObject(4, LocalTime.class)));
+                });
+        return map;
+    }
+
+    public Optional<Map<DayOfWeek, List<TimeRange>>> hoursOf(long professionalId) {
+        return Optional.ofNullable(hours().get(professionalId));
+    }
+
+    /** An empty week means "whenever the place is open" again. */
+    @org.springframework.transaction.annotation.Transactional
+    public void setHours(long professionalId, Map<DayOfWeek, List<TimeRange>> week) {
+        db.sql("DELETE FROM professional_hours WHERE professional_id = ?").param(professionalId).update();
+        week.forEach((day, ranges) -> ranges.forEach(r ->
+                db.sql("INSERT INTO professional_hours (professional_id, day_of_week, starts, ends) VALUES (?, ?, ?, ?)")
+                        .params(professionalId, day.getValue(), r.start(), r.end()).update()));
     }
 
     public long create(String name) {

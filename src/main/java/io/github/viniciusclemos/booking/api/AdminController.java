@@ -62,14 +62,27 @@ public class AdminController {
     public record ProfessionalForm(@NotBlank @Size(max = 60) String name, Boolean active) {
     }
 
-    public record TeamMember(long id, String name, boolean active, List<Long> services) {
+    /** hours: their own week, or null when they work whenever the place is open */
+    public record TeamMember(long id, String name, boolean active, List<Long> services,
+                             Map<DayOfWeek, List<TimeRange>> hours) {
     }
 
     @GetMapping("/professionals")
     List<TeamMember> professionals() {
         var services = professionals.servicesOf();
+        var hours = professionals.hours();
         return professionals.all().stream()
-                .map(p -> new TeamMember(p.id(), p.name(), p.active(), services.getOrDefault(p.id(), List.of()))).toList();
+                .map(p -> new TeamMember(p.id(), p.name(), p.active(), services.getOrDefault(p.id(), List.of()),
+                        hours.get(p.id()))).toList();
+    }
+
+    /** One person's own week, inside the place's hours; an empty one goes back to the place's. */
+    @PutMapping("/professionals/{id}/hours")
+    Map<DayOfWeek, List<TimeRange>> professionalHours(@PathVariable long id, @RequestBody Map<DayOfWeek, List<TimeRange>> week) {
+        if (professionals.find(id).isEmpty()) throw new NotFound("Professional not found");
+        new WeeklySchedule().onlyWhen(week); // refuses overlapping ranges before anything is saved
+        professionals.setHours(id, new EnumMap<>(week));
+        return professionals.hoursOf(id).orElse(Map.of());
     }
 
     /** The services this person does; an empty list goes back to "all of them". */

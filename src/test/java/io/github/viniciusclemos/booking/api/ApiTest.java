@@ -55,7 +55,7 @@ class ApiTest {
 
     @BeforeEach
     void barbershop() throws Exception {
-        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, professional, professional_service RESTART IDENTITY CASCADE")
+        db.sql("TRUNCATE booking, service, working_hours, date_override, time_off, professional, professional_service, professional_hours RESTART IDENTITY CASCADE")
                 .update();
         // one barber unless a test adds more, like a place that just opened
         db.sql("INSERT INTO professional (name) VALUES ('Rui')").update();
@@ -293,6 +293,34 @@ class ApiTest {
         // back to "all of them"
         send(put("/api/admin/professionals/2/services"), "[]").andExpect(status().isOk());
         bookWith("2026-11-03T11:00", 2L, "Duda").andExpect(status().isCreated());
+    }
+
+    @Test
+    void someoneWithTheirOwnHours() throws Exception {
+        send(post("/api/admin/professionals"), "{\"name\":\"Bia\"}").andExpect(status().isCreated());
+        // Bia only works Tuesday afternoons
+        send(put("/api/admin/professionals/2/hours"), """
+                {"TUESDAY": [{"start":"13:00","end":"18:00"}]}""").andExpect(status().isOk())
+                .andExpect(jsonPath("$.TUESDAY", hasSize(1)));
+
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03").param("professionalId", "2"))
+                .andExpect(jsonPath("$.slots", not(hasItem("10:00:00"))))
+                .andExpect(jsonPath("$.slots", hasItem("15:00:00")));
+        bookWith("2026-11-03T10:00", 2L, "Ana").andExpect(status().isConflict());
+        // on a Monday she's off, so "anyone" at 15:00 can only be Rui
+        bookWith("2026-11-02T15:00", null, "Ana").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.professional").value("Rui"));
+        bookWith("2026-11-02T15:00", null, "Duda").andExpect(status().isConflict());
+
+        mvc.perform(get("/api/admin/professionals").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$[0].hours").doesNotExist())
+                .andExpect(jsonPath("$[1].hours.TUESDAY[0].start").value("13:00:00"));
+        // overlapping ranges are refused, and an empty week gives her the place's hours back
+        send(put("/api/admin/professionals/2/hours"), """
+                {"TUESDAY": [{"start":"09:00","end":"12:00"},{"start":"11:00","end":"14:00"}]}""")
+                .andExpect(status().isBadRequest());
+        send(put("/api/admin/professionals/2/hours"), "{}").andExpect(status().isOk());
+        bookWith("2026-11-03T10:00", 2L, "Ana").andExpect(status().isCreated());
     }
 
     @Test

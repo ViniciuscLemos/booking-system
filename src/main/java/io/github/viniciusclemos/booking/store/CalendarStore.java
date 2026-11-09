@@ -38,6 +38,7 @@ public class CalendarStore {
         WeeklySchedule schedule = new WeeklySchedule();
         weeklyHours().forEach((day, ranges) -> schedule.on(day, ranges.toArray(TimeRange[]::new)));
         overrides(from, to).forEach((date, ranges) -> schedule.onDate(date, ranges.toArray(TimeRange[]::new)));
+        ownHours(professionalId).ifPresent(schedule::onlyWhen);
 
         // one extra day at the end, for a buffer that runs past midnight
         LocalDateTime start = from.atStartOfDay();
@@ -54,6 +55,17 @@ public class CalendarStore {
                 .params(professionalId, end, start).query(BookingRow.class).list()
                 .stream().map(BookingRow::toBooking).toList();
         return new Calendar(schedule, timeOff, bookings, policy);
+    }
+
+    private Optional<Map<DayOfWeek, List<TimeRange>>> ownHours(long professionalId) {
+        Map<DayOfWeek, List<TimeRange>> week = new TreeMap<>();
+        db.sql("SELECT day_of_week, starts, ends FROM professional_hours WHERE professional_id = ?")
+                .param(professionalId)
+                .query(rs -> {
+                    week.computeIfAbsent(DayOfWeek.of(rs.getInt(1)), d -> new ArrayList<>())
+                            .add(new TimeRange(rs.getObject(2, LocalTime.class), rs.getObject(3, LocalTime.class)));
+                });
+        return week.isEmpty() ? Optional.empty() : Optional.of(week);
     }
 
     /** Only the place's hours for a range of dates, with nobody's bookings in it. */
