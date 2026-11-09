@@ -81,7 +81,7 @@ public class AdminController {
     Map<DayOfWeek, List<TimeRange>> professionalHours(@PathVariable long id, @RequestBody Map<DayOfWeek, List<TimeRange>> week) {
         if (professionals.find(id).isEmpty()) throw new NotFound("Professional not found");
         new WeeklySchedule().onlyWhen(week); // refuses overlapping ranges before anything is saved
-        professionals.setHours(id, new EnumMap<>(week));
+        professionals.setHours(id, weekOf(week));
         return professionals.hoursOf(id).orElse(Map.of());
     }
 
@@ -160,7 +160,7 @@ public class AdminController {
         // goes through WeeklySchedule just to refuse overlapping ranges before saving
         WeeklySchedule check = new WeeklySchedule();
         week.forEach((day, ranges) -> check.on(day, ranges.toArray(TimeRange[]::new)));
-        calendars.replaceWeeklyHours(new EnumMap<>(week));
+        calendars.replaceWeeklyHours(weekOf(week));
         return calendars.weeklyHours();
     }
 
@@ -233,5 +233,12 @@ public class AdminController {
     @PostMapping("/bookings/{id}/cancel")
     BookingRow cancel(@PathVariable long id) {
         return scheduling.cancelByStaff(id);
+    }
+
+    // new EnumMap<>(map) refuses an empty plain map, and an empty week is a real answer here
+    private static EnumMap<DayOfWeek, List<TimeRange>> weekOf(Map<DayOfWeek, List<TimeRange>> week) {
+        EnumMap<DayOfWeek, List<TimeRange>> copy = new EnumMap<>(DayOfWeek.class);
+        copy.putAll(week);
+        return copy;
     }
 }
