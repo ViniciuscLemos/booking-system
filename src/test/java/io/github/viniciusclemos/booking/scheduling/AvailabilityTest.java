@@ -8,11 +8,13 @@ import io.github.viniciusclemos.booking.domain.ServiceOffering;
 import io.github.viniciusclemos.booking.domain.TimeRange;
 import org.junit.jupiter.api.Test;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 import static io.github.viniciusclemos.booking.scheduling.BookingRulesTest.BEARD;
 import static io.github.viniciusclemos.booking.scheduling.BookingRulesTest.HAIRCUT;
@@ -85,5 +87,24 @@ class AvailabilityTest {
     @Test
     void timeRangeHelper() {
         assertThat(TimeRange.of("09:00", "12:00").overlaps(TimeRange.of("12:00", "13:00"))).isFalse();
+    }
+
+    @Test
+    void someoneWhoOnlyDoesAfternoons() {
+        Calendar calendar = barbershop().withPolicy(
+                new BookingPolicy(Duration.ofHours(2), Duration.ofDays(60), Duration.ofMinutes(60)));
+        // down for 11:00-16:00: the lunch break is still the place's, and nothing after 16:00
+        calendar.schedule().onlyWhen(Map.of(DayOfWeek.TUESDAY, List.of(TimeRange.of("11:00", "16:00"))));
+        assertThat(slots(calendar, HAIRCUT, TUESDAY_3)).containsExactly("11:00", "13:00", "14:00", "15:00");
+        // a day they're not down for at all is a day off
+        assertThat(slots(calendar, HAIRCUT, TUESDAY_3.plusDays(1))).isEmpty();
+    }
+
+    @Test
+    void theirHoursNeverGoPastThePlaces() {
+        Calendar calendar = barbershop().withPolicy(
+                new BookingPolicy(Duration.ofHours(2), Duration.ofDays(60), Duration.ofMinutes(60)));
+        calendar.schedule().onlyWhen(Map.of(DayOfWeek.TUESDAY, List.of(TimeRange.of("07:00", "10:00"))));
+        assertThat(slots(calendar, HAIRCUT, TUESDAY_3)).containsExactly("09:00");
     }
 }
