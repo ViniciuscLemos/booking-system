@@ -346,7 +346,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .team-hours .muted { margin: 0 0 10px; font-size: 14px; }
 .own-day { display: grid; grid-template-columns: 130px auto auto auto; gap: 10px; align-items: center; justify-content: start; padding: 4px 0; }
 .own-day input[type=time]:disabled { opacity: .45; }
-.own-day label.check { display: inline-flex; align-items: center; gap: 6px; }
+.own-day label.check { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
 .own-actions { display: flex; gap: 18px; align-items: center; margin-top: 12px; }
 @media (max-width: 520px) { .own-day { grid-template-columns: 1fr auto auto auto; } }
 .plain-list li.team-services { display: flex; grid-template-columns: none; }

@@ -97,7 +97,19 @@ function ownHoursText(hours) {
     const key = ranges.map((r) => `${hm(r.start)}–${hm(r.end)}`).join(', ');
     groups.set(key, [...(groups.get(key) || []), SHORT_DAY[day]]);
   }
-  return [...groups].map(([key, days]) => `${days.join(', ')} ${key}`).join(' · ');
+  return [...groups].map(([key, days]) => `${dayRuns(days)} ${key}`).join(' · ');
+}
+
+// "Tue, Wed, Thu, Fri" reads better as "Tue–Fri"
+function dayRuns(days) {
+  const order = Object.values(SHORT_DAY);
+  const runs = [];
+  for (const d of days) {
+    const last = runs.at(-1);
+    if (last && order.indexOf(d) === order.indexOf(last.at(-1)) + 1) last.push(d);
+    else runs.push([d]);
+  }
+  return runs.map((r) => (r.length > 2 ? `${r[0]}–${r.at(-1)}` : r.join(', '))).join(', ');
 }
 
 // one stretch per day is enough for a person's week: the place's lunch break still applies on top
