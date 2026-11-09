@@ -75,13 +75,84 @@ async function loadTeam() {
       loadTeam();
     });
     choices.append(save);
-    pick.addEventListener('click', () => { choices.hidden = !choices.hidden; });
-    const row = teamRow(p, does, pick);
-    return [row, choices];
+    pick.addEventListener('click', () => { choices.hidden = !choices.hidden; hours.hidden = true; });
+    const hours = hoursPanel(p);
+    const when = el('button', { type: 'button', class: 'link small' }, 'Hours');
+    when.addEventListener('click', () => { hours.hidden = !hours.hidden; choices.hidden = true; });
+    const row = teamRow(p, [does, ownHoursText(p.hours)].filter(Boolean).join(' · '), pick, when);
+    return [row, choices, hours];
   }));
 }
 
-function teamRow(p, does, pick) {
+const SHORT_DAY = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' };
+const hm = (t) => t.slice(0, 5);
+
+// "Tue, Thu 13:00-18:00 · Sat 09:00-13:00": days with the same hours go together
+function ownHoursText(hours) {
+  if (!hours) return '';
+  const groups = new Map();
+  for (const day of WEEKDAYS) {
+    const ranges = hours[day];
+    if (!ranges) continue;
+    const key = ranges.map((r) => `${hm(r.start)}–${hm(r.end)}`).join(', ');
+    groups.set(key, [...(groups.get(key) || []), SHORT_DAY[day]]);
+  }
+  return [...groups].map(([key, days]) => `${days.join(', ')} ${key}`).join(' · ');
+}
+
+// one stretch per day is enough for a person's week: the place's lunch break still applies on top
+function hoursPanel(p) {
+  const open = WEEKDAYS.filter((day) => (state.business.hours[day] || []).length);
+  const rows = open.map((day) => {
+    const place = state.business.hours[day];
+    const theirs = p.hours ? p.hours[day] : place;
+    const works = el('input', { type: 'checkbox' });
+    works.checked = !!theirs;
+    const from = el('input', { type: 'time', value: hm((theirs || place)[0].start), 'aria-label': `${p.name} on ${DAY_NAMES[day]} from` });
+    const until = el('input', { type: 'time', value: hm((theirs || place).at(-1).end), 'aria-label': `${p.name} on ${DAY_NAMES[day]} until` });
+    const sync = () => { from.disabled = until.disabled = !works.checked; };
+    works.addEventListener('change', sync);
+    sync();
+    const row = el('div', { class: 'own-day' }, el('label', { class: 'check' }, works, ` ${DAY_NAMES[day]}`), from,
+      el('span', { 'aria-hidden': 'true' }, 'to'), until);
+    row.read = () => ({ day, works: works.checked, start: from.value, end: until.value, place });
+    return row;
+  });
+
+  const save = el('button', { type: 'button', class: 'confirm small-btn' }, 'Save hours');
+  const reset = el('button', { type: 'button', class: 'link small' }, 'Whenever the place is open');
+  const panel = el('li', { class: 'team-hours', hidden: true },
+    el('p', { class: 'muted' }, `The days ${p.name} works, and from when to when. Outside the place's hours nobody is booked anyway.`),
+    ...rows, el('div', { class: 'own-actions' }, save, reset));
+
+  const send = async (week) => {
+    $('team-error').hidden = true;
+    try {
+      await api(`/api/admin/professionals/${p.id}/hours`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(week),
+      });
+    } catch (err) {
+      if (!handle401(err)) fail($('team-error'), err.message);
+      return;
+    }
+    loadTeam();
+  };
+  save.addEventListener('click', () => {
+    const days = rows.map((r) => r.read());
+    const bad = days.find((d) => d.works && (!d.start || !d.end || d.start >= d.end));
+    if (bad) return fail($('team-error'), `${DAY_NAMES[bad.day]}: the hours have to end after they start.`);
+    if (!days.some((d) => d.works)) return fail($('team-error'), `Tick at least one day, or turn ${p.name} off.`);
+    // every day ticked with the place's own hours is the same as having none of their own
+    const same = days.every((d) => d.works && d.start === hm(d.place[0].start) && d.end === hm(d.place.at(-1).end));
+    const week = {};
+    if (!same) for (const d of days) if (d.works) week[d.day] = [{ start: d.start, end: d.end }];
+    send(week);
+  });
+  reset.addEventListener('click', () => send({}));
+  return panel;
+}
+
+function teamRow(p, does, pick, when) {
   const toggle = el('button', { type: 'button', class: 'link small' }, p.active ? 'Turn off' : 'Turn back on');
   toggle.addEventListener('click', () => saveMember(p.id, { name: p.name, active: !p.active }));
   const rename = el('button', { type: 'button', class: 'link small' }, 'Rename');
@@ -92,7 +163,7 @@ function teamRow(p, does, pick) {
   return el('li', { class: p.active ? '' : 'off' },
     el('span', { class: 'when' }, p.name),
     el('span', { class: 'muted' }, p.active ? does : 'turned off'),
-    el('span', { class: 'side' }, pick, rename, toggle));
+    el('span', { class: 'side' }, pick, when, rename, toggle));
 }
 
 async function saveMember(id, body) {
