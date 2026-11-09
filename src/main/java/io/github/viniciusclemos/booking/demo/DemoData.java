@@ -74,6 +74,14 @@ public class DemoData implements ApplicationRunner {
                     SELECT p.id, s.id FROM professional p, service s WHERE p.name = 'Caio' AND s.name <> 'Hair coloring'""")
                     .update();
         }
+        // Bia only works afternoons, Tuesday to Saturday. Only seeded while nobody has hours of
+        // their own, so it doesn't undo what someone trying the staff page changed
+        if (db.sql("SELECT count(*) FROM professional_hours").query(Integer.class).single() == 0) {
+            db.sql("""
+                    INSERT INTO professional_hours (professional_id, day_of_week, starts, ends)
+                    SELECT p.id, d, '13:00', '19:00' FROM professional p, generate_series(2, 6) d WHERE p.name = 'Bia'""")
+                    .update();
+        }
         topUp();
     }
 
@@ -112,6 +120,14 @@ public class DemoData implements ApplicationRunner {
                                     OR EXISTS (SELECT 1 FROM professional_service WHERE professional_id = ? AND service_id = ?)""")
                         .params(barber, barber, offer.id()).query(Boolean.class).single();
                 if (!does) continue;
+                // and inside their own hours, if they have any
+                boolean works = db.sql("""
+                                SELECT NOT EXISTS (SELECT 1 FROM professional_hours WHERE professional_id = ?)
+                                    OR EXISTS (SELECT 1 FROM professional_hours WHERE professional_id = ? AND day_of_week = ?
+                                               AND starts <= ?::time AND ends >= ?::time)""")
+                        .params(barber, barber, date.getDayOfWeek().getValue(), start.toLocalTime(), end.toLocalTime())
+                        .query(Boolean.class).single();
+                if (!works) continue;
                 db.sql("""
                                 INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends,
                                                      blocked_until)
