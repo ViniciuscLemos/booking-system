@@ -351,3 +351,11 @@ input[aria-invalid="true"] { border-color: var(--red); }
 @media (max-width: 520px) { .own-day { grid-template-columns: 1fr auto auto auto; } }
 .plain-list li.team-services { display: flex; grid-template-columns: none; }
 .team-services label.check { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; }
+
+.move { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); }
+.move h3 { font: 600 1.25rem/1.2 var(--serif); margin: 0 0 6px; }
+.move-day { display: inline-flex; align-items: center; gap: 10px; margin: 10px 0 14px; }
+.move .slots { max-width: 520px; }
+.calendar-row { margin: 18px 0 0; }
+button.secondary { margin-top: 4px; padding: 11px 20px; border: 1px solid var(--ink); border-radius: 6px; background: transparent; color: var(--ink); font-weight: 600; cursor: pointer; }
+button.secondary:hover { background: var(--ink); color: var(--paper); }

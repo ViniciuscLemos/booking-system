@@ -24,9 +24,18 @@
     <dl class="receipt" id="receipt" hidden></dl>
     <p id="note"></p>
     <div class="actions">
+      <button type="button" class="secondary" id="move" hidden>Change the time</button>
       <button type="button" class="danger" id="cancel" hidden>Cancel this booking</button>
       <a class="link" href="./" id="book">Book a time</a>
     </div>
+    <section class="move" id="move-panel" hidden aria-labelledby="move-title">
+      <h3 id="move-title">Pick another time</h3>
+      <p class="muted">Same service, same person. The time you have now stays yours until you pick a new one.</p>
+      <label class="move-day">Day <input type="date" id="move-day"></label>
+      <div class="slots" id="move-slots"></div>
+      <p class="muted" id="move-note" role="status"></p>
+    </section>
+    <p class="calendar-row" id="calendar-row" hidden><a id="calendar" href="#" download="booking.ics">Add it to your calendar</a></p>
     <p class="error" id="error" role="alert" hidden></p>
   </main>
 </body>

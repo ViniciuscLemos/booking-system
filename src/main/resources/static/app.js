@@ -285,6 +285,7 @@ function showDone(booking) {
   // Referer of another site), so it doesn't end up in anyone's logs
   const link = new URL(`cancel.html#${booking.cancelToken}`, location.href).href;
   $('cancel-link').href = link;
+  $('calendar-link').href = `/api/bookings/by-token/${encodeURIComponent(booking.cancelToken)}/calendar.ics`;
   $('cancel-link').textContent = link.replace(/^https?:\/\//, '');
   const until = booking.cancelUntil;
   $('cancel-until').textContent = `${formatDate(until.slice(0, 10), { weekday: 'short', month: 'short', day: 'numeric' })} at ${until.slice(11, 16)}`;

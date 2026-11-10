@@ -45,11 +45,16 @@ function show(booking) {
   if (cancelled) {
     $('note').textContent = 'The time is free for someone else now.';
   } else if (booking.canCancel) {
-    $('note').textContent = `You can cancel online until ${until}.`;
+    $('note').textContent = `You can change the time or cancel online until ${until}.`;
   } else {
     $('note').textContent = `Online cancelling closed on ${until}. If you can't make it, please give us a call.`;
   }
   $('cancel').hidden = !booking.canCancel;
+  $('move').hidden = !booking.canCancel;
+  if (!booking.canCancel) $('move-panel').hidden = true;
+  current = booking;
+  $('calendar-row').hidden = cancelled;
+  $('calendar').href = `/api/bookings/by-token/${encodeURIComponent(token)}/calendar.ics`;
   $('book').textContent = cancelled ? 'Book another time' : 'Book a time';
 }
 
@@ -73,6 +78,71 @@ $('cancel').addEventListener('click', async () => {
     button.disabled = false;
   }
 });
+
+// changing the time: the free times of a day with the same person, and a tap moves it
+let current = null;
+
+$('move').addEventListener('click', () => {
+  const panel = $('move-panel');
+  panel.hidden = !panel.hidden;
+  if (panel.hidden) return;
+  const input = $('move-day');
+  input.min = new Date().toISOString().slice(0, 10);
+  if (!input.value) input.value = current.starts.slice(0, 10);
+  loadTimes();
+  input.focus();
+});
+$('move-day').addEventListener('change', loadTimes);
+
+async function loadTimes() {
+  const date = $('move-day').value;
+  const box = $('move-slots');
+  box.replaceChildren();
+  $('move-note').textContent = '';
+  if (!date) return;
+  let slots;
+  try {
+    ({ slots } = await api(`/api/availability?serviceId=${current.serviceId}&date=${date}&professionalId=${current.professionalId}`));
+  } catch (err) {
+    $('move-note').textContent = err.message;
+    return;
+  }
+  const mine = current.starts.slice(0, 10) === date ? current.starts.slice(11, 16) : null;
+  const times = slots.map((s) => s.slice(0, 5)).filter((t) => t !== mine);
+  if (!times.length) {
+    $('move-note').textContent = `${current.professional} has nothing free that day. Try another one.`;
+    return;
+  }
+  box.append(...times.map((t) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'slot';
+    b.textContent = t;
+    b.addEventListener('click', () => moveTo(`${date}T${t}`, b));
+    return b;
+  }));
+}
+
+async function moveTo(start, button) {
+  $('error').hidden = true;
+  button.disabled = true;
+  try {
+    const moved = await api(`/api/bookings/by-token/${encodeURIComponent(token)}/move`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start }),
+    });
+    show(moved);
+    $('move-panel').hidden = true;
+    $('kicker').textContent = 'Moved';
+    $('view').focus();
+  } catch (err) {
+    // someone took it a moment ago: say so and show the day again
+    $('move-note').textContent = err.status === 409 && !/call/.test(err.message)
+      ? `${start.slice(11)} was just taken. Here's what's still free.` : err.message;
+    if (err.status === 409 && !/call/.test(err.message)) loadTimes();
+  } finally {
+    button.disabled = false;
+  }
+}
 
 async function start() {
   api('/api/business').then((b) => {
