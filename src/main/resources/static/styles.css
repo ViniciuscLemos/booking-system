@@ -354,7 +354,7 @@ input[aria-invalid="true"] { border-color: var(--red); }
 
 .move { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); }
 .move h3 { font: 600 1.25rem/1.2 var(--serif); margin: 0 0 6px; }
-.move-day { display: inline-flex; align-items: center; gap: 10px; margin: 10px 0 14px; }
+.move-day { display: inline-flex; flex-direction: row; align-items: center; gap: 10px; margin: 10px 0 14px; }
 .move .slots { max-width: 520px; }
 .calendar-row { margin: 18px 0 0; }
 button.secondary { margin-top: 4px; padding: 11px 20px; border: 1px solid var(--ink); border-radius: 6px; background: transparent; color: var(--ink); font-weight: 600; cursor: pointer; }
