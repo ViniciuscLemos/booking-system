@@ -119,13 +119,13 @@ public class PublicController {
     }
 
     // what the client sees of a booking: no phone, and the cancel deadline
-    public record BookingView(long id, long serviceId, String service, String professional, String clientName,
+    public record BookingView(long id, long serviceId, String service, long professionalId, String professional, String clientName,
                               LocalDateTime starts, LocalDateTime ends, String status, LocalDateTime cancelUntil,
                               boolean canCancel) {
     }
 
     private BookingView view(BookingRow row) {
-        return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.professionalName(), row.clientName(),
+        return new BookingView(row.id(), row.serviceId(), row.serviceName(), row.professionalId(), row.professionalName(), row.clientName(),
                 row.starts(), row.ends(), row.status(), scheduling.cancelDeadline(row), scheduling.clientCanCancel(row));
     }
 
@@ -149,6 +149,26 @@ public class PublicController {
     @GetMapping("/bookings/by-token/{token}")
     BookingView byToken(@PathVariable String token) {
         return view(scheduling.byCancelToken(token));
+    }
+
+    public record Move(@NotNull LocalDateTime start) {
+    }
+
+    @PostMapping("/bookings/by-token/{token}/move")
+    BookingView move(@PathVariable String token, @Valid @RequestBody Move body) {
+        return view(scheduling.moveByClient(token, body.start().withSecond(0).withNano(0)));
+    }
+
+    /** The booking for a calendar app, with reminders the day before and an hour before. */
+    @GetMapping(value = "/bookings/by-token/{token}/calendar.ics")
+    org.springframework.http.ResponseEntity<String> calendar(@PathVariable String token) {
+        var booking = scheduling.byCancelToken(token);
+        String body = CalendarFile.of(booking, "booking-" + booking.id() + "@booking-system", settings.businessName(),
+                settings.businessAddress(), settings.zone(), java.time.Instant.now());
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Type", "text/calendar; charset=utf-8")
+                .header("Content-Disposition", "attachment; filename=\"booking.ics\"")
+                .body(body);
     }
 
     @PostMapping("/bookings/by-token/{token}/cancel")

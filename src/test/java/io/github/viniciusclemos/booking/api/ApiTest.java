@@ -400,6 +400,46 @@ class ApiTest {
     }
 
     @Test
+    void theClientMovesTheBookingWithTheSameLink() throws Exception {
+        String token = token(book("2026-11-03T10:00"));
+        book("2026-11-03T14:00").andExpect(status().isCreated());
+        // half an hour later overlaps its own old time, and that's fine
+        send(post("/api/bookings/by-token/" + token + "/move"), "{\"start\":\"2026-11-03T10:30\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.starts").value("2026-11-03T10:30:00"))
+                .andExpect(jsonPath("$.id").value(1));
+        mvc.perform(get("/api/availability").param("serviceId", "1").param("date", "2026-11-03"))
+                .andExpect(jsonPath("$.slots", hasItem("09:30:00")))
+                .andExpect(jsonPath("$.slots", not(hasItem("10:30:00"))));
+        // someone else's time, or a closed one, is refused and nothing changes
+        send(post("/api/bookings/by-token/" + token + "/move"), "{\"start\":\"2026-11-03T14:00\"}")
+                .andExpect(status().isConflict());
+        send(post("/api/bookings/by-token/" + token + "/move"), "{\"start\":\"2026-11-03T12:15\"}")
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/bookings/by-token/" + token)).andExpect(jsonPath("$.starts").value("2026-11-03T10:30:00"));
+        // too close to the new time: has to call, like cancelling
+        String late = token(book("2026-11-02T09:30"));
+        send(post("/api/bookings/by-token/" + late + "/move"), "{\"start\":\"2026-11-03T16:00\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("give us a call")));
+    }
+
+    @Test
+    void theBookingAsACalendarFile() throws Exception {
+        String token = token(book("2026-11-03T10:00"));
+        String ics = mvc.perform(get("/api/bookings/by-token/" + token + "/calendar.ics"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Content-Type", org.hamcrest.Matchers.startsWith("text/calendar")))
+                .andReturn().getResponse().getContentAsString();
+        // 10:00 in São Paulo is 13:00 UTC; 30 minutes of haircut
+        assertThat(ics).contains("BEGIN:VEVENT", "DTSTART:20261103T130000Z", "DTEND:20261103T133000Z",
+                "SUMMARY:Haircut with Rui at Northside Barbers", "TRIGGER:-P1D", "STATUS:CONFIRMED");
+        assertThat(ics).contains("\r\n").doesNotContain("98888");
+        mvc.perform(get("/api/bookings/by-token/nope/calendar.ics")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void tooCloseToTheTimeTheClientHasToCall() throws Exception {
         // it's Monday 07:00 and the booking is at 09:30: the 3 hours ended at 06:30
         String token = token(book("2026-11-02T09:30"));

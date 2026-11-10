@@ -174,6 +174,36 @@ public class SchedulingService {
         return cancel(booking, "CLIENT");
     }
 
+    /**
+     * Moves the booking to another time, same service, same person. Allowed until the same
+     * deadline as cancelling. The booking keeps its id and its link: it's the same row with new
+     * times, and the overlap constraint checks the new times like it would for a new booking.
+     */
+    public BookingRow moveByClient(String token, LocalDateTime start) {
+        BookingRow booking = byCancelToken(token);
+        if (!booking.confirmed()) throw new CancelRefused("This booking was cancelled.");
+        if (!clientCanCancel(booking)) {
+            throw new CancelRefused("It's too close to the time to change it online. Please give us a call.");
+        }
+        ServiceRow service = activeService(booking.serviceId());
+        Booking wanted = new Booking(service.toOffering(), start);
+        Calendar calendar = calendars.load(start.toLocalDate(), start.toLocalDate(), settings.policy(), booking.professionalId());
+        // the booking itself isn't in the way of its own new time (10:00 to 10:30 overlaps the old 10:00)
+        Calendar without = new Calendar(calendar.schedule(), calendar.timeOff(),
+                calendar.bookings().stream().filter(b -> !b.start().equals(booking.starts())).toList(), calendar.policy());
+        List<Violation> problems = BookingRules.check(without, wanted.service(), start, now());
+        if (!problems.isEmpty()) throw new BookingRefused(problems);
+        try {
+            if (!calendars.move(booking.id(), start, wanted.appointment().end(), wanted.blocked().end())) {
+                throw new CancelRefused("This booking was cancelled.");
+            }
+        } catch (DataIntegrityViolationException e) {
+            if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains("booking_no_overlap")) throw e;
+            throw new BookingRefused(List.of(Violation.CLASHES_WITH_BOOKING));
+        }
+        return booking(booking.id());
+    }
+
     /** The staff can cancel at any time, a client may call at the last minute. */
     public BookingRow cancelByStaff(long id) {
         BookingRow booking = booking(id);

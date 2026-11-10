@@ -149,6 +149,12 @@ public class CalendarStore {
                 .params(day.atStartOfDay(), day.plusDays(1).atStartOfDay()).query(BookingRow.class).list();
     }
 
+    /** New times for a confirmed booking; false when it was cancelled in the meantime. */
+    public boolean move(long id, LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil) {
+        return db.sql("UPDATE booking SET starts = ?, ends = ?, blocked_until = ? WHERE id = ? AND status = 'CONFIRMED'")
+                .params(starts, ends, blockedUntil, id).update() == 1;
+    }
+
     /** Only touches a confirmed booking, so two cancels at once can't both "win". */
     public boolean cancel(long id, String by, LocalDateTime at) {
         return db.sql("""
