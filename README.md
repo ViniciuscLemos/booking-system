@@ -29,18 +29,22 @@ It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no b
   <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
 </p>
 
-## Cancelling
+## Changing or cancelling
 
-The confirmation shows a link the client keeps. It opens a page with the booking and a button to cancel, up to 3 hours before the time (`booking.cancel-until`). After that the page says to call instead, and the staff can still cancel from their side at any time.
+The confirmation shows a link the client keeps. It opens a page with the booking, a button to pick another time and one to cancel, up to 3 hours before the time (`booking.cancel-until`). After that the page says to call instead, and the staff can still cancel from their side at any time.
 
 <p>
   <img src="docs/booking-done.png" alt="The confirmation with the cancel link and until when it works" width="420">
   <img src="docs/cancel-page.png" alt="The cancel page with the booking and the cancel button" width="420">
 </p>
 
+<img src="docs/move.png" alt="The booking's page with 'Pick another time': a day and the free times with the same barber" width="520">
+
 - The link has a random 24 character token. The database keeps only its SHA-256, so a leaked backup can't be used to cancel other people's bookings.
 - The token goes after the `#` in the link. Browsers never send that part to a server, not even in the Referer to another site, so it stays out of server logs.
 - Bookings can't be read by id anymore (`/api/bookings/1`, `/2`, `/3`... would let anyone walk through the clients' names). Only by the token.
+- **Another time** keeps the same service and the same person, and it's the same booking: one `UPDATE` with the new times, so the link, the number and the calendar event stay the same. The new time goes through every rule a new booking does, and the overlap constraint checks it in the database. The booking's old time doesn't get in the way of its new one (10:00 to 10:30 overlaps, and that's fine), and until a new time is picked the old one stays the client's.
+- **Add it to your calendar** downloads an `.ics` file that Google Calendar, Apple and Outlook open, with a reminder the day before and one an hour before. Times are in UTC inside the file, so no calendar has to know São Paulo's timezone rules, and the event id is the booking's, so importing it again after moving updates the event instead of adding a second one.
 - Cancelling is an `UPDATE ... WHERE status = 'CONFIRMED'`, so two clicks at the same moment can't both cancel, and the time is free again right away (the overlap constraint only looks at confirmed bookings).
 
 ## The staff side
@@ -139,6 +143,8 @@ Client side:
 | `POST /api/bookings` | `{"serviceId":1,"start":"2026-11-03T10:00","clientName":"Ana","clientPhone":"(11) 98888-7777"}` |
 | `GET /api/bookings/by-token/{token}` | the booking from the cancel link, without the phone |
 | `POST /api/bookings/by-token/{token}/cancel` | cancels it, 409 if it's too late or already cancelled |
+| `POST /api/bookings/by-token/{token}/move` | `{"start": "..."}`, same person and service; 409 if that time isn't free or it's too late |
+| `GET /api/bookings/by-token/{token}/calendar.ics` | the booking for a calendar app, with two reminders |
 
 A refused booking answers 409 with the reasons:
 
@@ -196,5 +202,5 @@ The rules don't know about Spring or the database, which is why most of the test
 
 ## What's next
 
-- a reminder to the client the day before, with the cancel link
+- a reminder to the client by message the day before, with the link
 - the client seeing their own bookings from the phone number, without an account
