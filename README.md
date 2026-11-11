@@ -86,6 +86,13 @@ How the login works:
 
 I went with a session instead of a JWT because the page and the API are on the same site: a cookie the page can't touch is safer than a token stored in JavaScript, and logging out actually ends the session on the server.
 
+## On a phone and with a keyboard
+
+- Most clients book from a phone, so every page, the staff ones too, fits a 375px screen.
+- Fields are 16px so iOS doesn't zoom in, and the small Cancel, Edit and Hours buttons have a finger-sized hit area.
+- The service and person pickers are radio groups: Tab gets in, the arrow keys move between options.
+- Scrolling between steps doesn't glide when the system asks for less motion.
+
 ## The rules
 
 `BookingRules.check` takes a calendar, a service and a start time, and returns every reason the time is refused (empty list = it can be booked):
