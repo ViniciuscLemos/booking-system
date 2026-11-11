@@ -359,3 +359,21 @@ input[aria-invalid="true"] { border-color: var(--red); }
 .calendar-row { margin: 18px 0 0; }
 button.secondary { margin-top: 4px; padding: 11px 20px; border: 1px solid var(--ink); border-radius: 6px; background: transparent; color: var(--ink); font-weight: 600; cursor: pointer; }
 button.secondary:hover { background: var(--ink); color: var(--paper); }
+
+/* ---------- phones ---------- */
+@media (pointer: coarse) {
+  /* iOS zooms into any field under 16px when it gets the focus */
+  input, select, textarea { font-size: 16px; }
+  /* the small text buttons in the staff pages get a finger-sized hit area, same look */
+  .link, .link.small {
+    display: inline-block;
+    padding: 10px 4px;
+    margin: -10px -4px;
+  }
+  input[type='checkbox'], input[type='radio'] { width: 20px; height: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
