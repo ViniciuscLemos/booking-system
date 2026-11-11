@@ -307,3 +307,17 @@ async function start() {
 }
 
 start();
+
+// The pickers that work like radio buttons (service, who, whose agenda) also move with the
+// arrow keys, the way a screen reader user expects a radio group to.
+document.addEventListener('keydown', (e) => {
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+  const radio = step && e.target.closest?.('[role="radio"]');
+  const group = radio && radio.closest('[role="radiogroup"]');
+  if (!group) return;
+  const all = [...group.querySelectorAll('[role="radio"]:not([disabled])')];
+  const next = all[(all.indexOf(radio) + step + all.length) % all.length];
+  e.preventDefault();
+  next.focus();
+  next.click();
+});

@@ -14,6 +14,9 @@ const price = (cents) => new Intl.NumberFormat('pt-BR', {
 const hhmm = (t) => t.slice(0, 5);
 
 // dates come as "2026-11-03"; reading them as UTC keeps the browser's timezone out of it
+// smooth scrolling, unless the system was asked for less motion
+const glide = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
 function parseDate(iso) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d));
@@ -75,10 +78,10 @@ function renderBusiness() {
 function renderServices() {
   const list = $('services');
   if (!state.services.length) {
-    list.replaceChildren(el('li', { class: 'loading' }, 'No services available right now.'));
+    list.replaceChildren(el('li', { class: 'loading', role: 'none' }, 'No services available right now.'));
     return;
   }
-  list.replaceChildren(...state.services.map((s) => el('li', {},
+  list.replaceChildren(...state.services.map((s) => el('li', { role: 'none' },
     el('button', {
       type: 'button', class: 'service', role: 'radio',
       'aria-checked': String(state.service?.id === s.id),
@@ -173,7 +176,7 @@ async function pickDay(date, { scroll = true } = {}) {
   $('time-day').textContent = formatDate(date, { weekday: 'long', month: 'short', day: 'numeric' });
   const { slots } = await api(`/api/availability?serviceId=${state.service.id}&date=${date}${withPro()}`);
   renderTimes(slots.map(hhmm));
-  if (scroll) $('step-time').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (scroll) $('step-time').scrollIntoView({ behavior: glide(), block: 'nearest' });
 }
 
 // 3. time
@@ -210,7 +213,7 @@ function pickTime(time) {
     ` from ${time} to ${addMinutes(time, s.durationMin)}${state.pro ? ` with ${state.pro.name}` : ''} · ${price(s.priceCents)}`);
   $('form-error').hidden = true;
   $('step-details').hidden = false;
-  $('step-details').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('step-details').scrollIntoView({ behavior: glide(), block: 'nearest' });
 }
 
 // 4. details
@@ -251,7 +254,7 @@ $('details').addEventListener('submit', async (event) => {
       const notice = $('time-notice');
       notice.textContent = `${lost} is gone. ${why} Pick another time, your details are still there.`;
       notice.hidden = false;
-      $('step-time').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('step-time').scrollIntoView({ behavior: glide(), block: 'start' });
     } else {
       showError(err.body?.problems?.map((p) => `${p.code}: ${p.message}`).join('. ') || err.message);
     }
@@ -326,3 +329,17 @@ async function start() {
 }
 
 start();
+
+// The pickers that work like radio buttons (service, who, whose agenda) also move with the
+// arrow keys, the way a screen reader user expects a radio group to.
+document.addEventListener('keydown', (e) => {
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+  const radio = step && e.target.closest?.('[role="radio"]');
+  const group = radio && radio.closest('[role="radiogroup"]');
+  if (!group) return;
+  const all = [...group.querySelectorAll('[role="radio"]:not([disabled])')];
+  const next = all[(all.indexOf(radio) + step + all.length) % all.length];
+  e.preventDefault();
+  next.focus();
+  next.click();
+});
