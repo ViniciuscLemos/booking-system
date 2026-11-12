@@ -29,6 +29,12 @@ It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no b
   <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
 </p>
 
+## Reminding the day before
+
+Each booking still to come has a **Remind** link on the agenda. It opens WhatsApp with the message already written (*"Hi Lucas! A reminder from Northside Barbers: Haircut and beard with Caio tomorrow at 10:30, Rua dos Pinheiros 412. If you can't make it, just reply here."*) and the agenda marks it as reminded, with the time, so the next person at the desk doesn't send it twice. A booking that moves to another time loses the mark and needs a new reminder. Nothing is sent by the system: no SMS bill, no WhatsApp Business API, the staff presses send from their own phone.
+
+<img src="docs/remind.png" alt="Tomorrow's agenda: the first two bookings show 'Reminded 13:12', the others a Remind link next to Cancel" width="640">
+
 ## When the day is full
 
 A full day isn't a dead end. It still opens, says there are no times left, and offers the waiting list: a name and a phone, and the client gets their place in the line back. Asking twice with the same phone keeps the first place.
@@ -174,7 +180,7 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), marking a reminder as sent (`POST /api/admin/bookings/{id}/reminded`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
