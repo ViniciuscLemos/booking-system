@@ -154,8 +154,10 @@ function renderDays() {
   $('days').replaceChildren(...state.days.map((d) => {
     const label = !d.open ? 'closed' : d.free === 0 ? 'full' : `${d.free} free`;
     return el('li', {}, el('button', {
-      type: 'button', class: 'day',
-      disabled: d.free === 0,
+      type: 'button',
+      // a full day still opens, to join its waiting list; a closed one doesn't
+      disabled: !d.open,
+      class: d.free === 0 ? 'day is-full' : 'day',
       'aria-pressed': String(d.date === state.date),
       'aria-label': `${formatDate(d.date, { weekday: 'long', month: 'long', day: 'numeric' })}, ${label}`,
       onclick: () => pickDay(d.date),
@@ -181,10 +183,43 @@ async function pickDay(date, { scroll = true } = {}) {
 
 // 3. time
 
+// A full day: leave a name and a phone, and the place calls if someone cancels.
+function waitingForm() {
+  const name = el('input', { id: 'wait-name', autocomplete: 'name', required: true, maxlength: 80 });
+  const phone = el('input', { id: 'wait-phone', type: 'tel', autocomplete: 'tel', inputmode: 'tel', required: true, placeholder: '(11) 91234-5678' });
+  const note = el('p', { class: 'wait-note', role: 'status' });
+  const form = el('form', { class: 'waiting', 'aria-labelledby': 'wait-title' },
+    el('h3', { id: 'wait-title' }, 'Put me on the waiting list'),
+    el('p', { class: 'muted' }, `If someone cancels on ${formatDate(state.date, { weekday: 'long', month: 'long', day: 'numeric' })}, ${state.business.name} calls the first one in line.`),
+    el('div', { class: 'wait-fields' },
+      el('label', { for: 'wait-name' }, 'Your name', name),
+      el('label', { for: 'wait-phone' }, 'Phone', phone)),
+    el('button', { type: 'submit', class: 'secondary' }, 'Join the list'),
+    note);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    note.className = 'wait-note';
+    try {
+      const { place } = await api('/api/waiting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: state.service.id, date: state.date, clientName: name.value.trim(), clientPhone: phone.value.trim(), professionalId: state.pro?.id ?? null }),
+      });
+      form.querySelector('.wait-fields').hidden = true;
+      form.querySelector('button[type=submit]').hidden = true;
+      note.textContent = place === 1 ? "You're first in line. Keep your phone near." : `You're number ${place} in line. Keep your phone near.`;
+    } catch (err) {
+      note.className = 'wait-note error';
+      note.textContent = err.message;
+    }
+  });
+  return form;
+}
+
 function renderTimes(slots) {
   if (!slots.length) {
     $('times').replaceChildren(el('p', { class: 'empty' }, 'No times left on this day. ',
-      el('button', { type: 'button', onclick: loadDays }, 'See other days')));
+      el('button', { type: 'button', onclick: loadDays }, 'See other days')), waitingForm());
     return;
   }
   const periods = [

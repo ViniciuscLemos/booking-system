@@ -379,3 +379,20 @@ button.secondary:hover { background: var(--ink); color: var(--paper); }
 }
 
 .noscript { max-width: 560px; margin: 40px auto; padding: 14px 18px; border-left: 3px solid currentColor; font: 16px/1.5 system-ui, sans-serif; }
+
+/* a full day still opens, a little quieter */
+.day.is-full .free { color: var(--muted); }
+.day.is-full .dn { opacity: 0.6; }
+.waiting { margin-top: 18px; padding: 16px 18px; border: 1px dashed var(--line); border-radius: 8px; }
+.waiting h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.waiting .muted { margin: 0 0 12px; }
+.wait-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 560px) { .wait-fields { grid-template-columns: 1fr; } }
+.wait-note { margin: 10px 0 0; }
+
+.waiting-list { margin-top: 28px; }
+.waiting-list h3 { margin: 0 0 2px; }
+.waiting-list .muted { margin: 0 0 10px; font-size: 0.92rem; }
+.waiting-list ol { margin: 0; padding-left: 1.4em; }
+.waiting-list li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.waiting-list .side { display: flex; gap: 14px; align-items: baseline; }
