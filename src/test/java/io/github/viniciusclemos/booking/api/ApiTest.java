@@ -425,6 +425,21 @@ class ApiTest {
     }
 
     @Test
+    void theStaffMarksTheReminderAndMovingClearsIt() throws Exception {
+        String token = token(book("2026-11-03T10:00"));
+        send(post("/api/admin/bookings/1/reminded"), "").andExpect(status().isNoContent());
+        mvc.perform(get("/api/admin/bookings").param("date", "2026-11-03").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$[0].remindedAt").isNotEmpty());
+        // a new time needs a new reminder
+        send(post("/api/bookings/by-token/" + token + "/move"), "{\"start\":\"2026-11-03T15:00\"}").andExpect(status().isOk());
+        mvc.perform(get("/api/admin/bookings").param("date", "2026-11-03").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$[0].remindedAt").isEmpty());
+        send(post("/api/bookings/by-token/" + token + "/cancel"), "").andExpect(status().isOk());
+        send(post("/api/admin/bookings/1/reminded"), "").andExpect(status().isNotFound());
+        send(post("/api/admin/bookings/99/reminded"), "").andExpect(status().isNotFound());
+    }
+
+    @Test
     void aFullDayHasAWaitingListTheStaffSees() throws Exception {
         String join = """
                 {"serviceId":%d,"date":"%s","clientName":"%s","clientPhone":"%s"}""";

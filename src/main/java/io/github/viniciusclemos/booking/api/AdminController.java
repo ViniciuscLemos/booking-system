@@ -230,6 +230,13 @@ public class AdminController {
         return calendars.bookingsOn(date);
     }
 
+    /** The staff sent the reminder (the agenda opens WhatsApp with the message written). */
+    @PostMapping("/bookings/{id}/reminded")
+    ResponseEntity<Void> reminded(@PathVariable long id) {
+        if (!calendars.markReminded(id, scheduling.now())) throw new NotFound("No confirmed booking with that id");
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/bookings/{id}/cancel")
     BookingRow cancel(@PathVariable long id) {
         return scheduling.cancelByStaff(id);

@@ -151,8 +151,13 @@ public class CalendarStore {
 
     /** New times for a confirmed booking; false when it was cancelled in the meantime. */
     public boolean move(long id, LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil) {
-        return db.sql("UPDATE booking SET starts = ?, ends = ?, blocked_until = ? WHERE id = ? AND status = 'CONFIRMED'")
+        return db.sql("UPDATE booking SET starts = ?, ends = ?, blocked_until = ?, reminded_at = NULL WHERE id = ? AND status = 'CONFIRMED'")
                 .params(starts, ends, blockedUntil, id).update() == 1;
+    }
+
+    /** Marks the reminder as sent; false when the booking isn't there or isn't confirmed anymore. */
+    public boolean markReminded(long id, LocalDateTime at) {
+        return db.sql("UPDATE booking SET reminded_at = ? WHERE id = ? AND status = 'CONFIRMED'").params(at, id).update() == 1;
     }
 
     /** Only touches a confirmed booking, so two cancels at once can't both "win". */
@@ -211,6 +216,6 @@ public class CalendarStore {
     private static final String BOOKING_SELECT = """
             SELECT b.id, b.service_id, s.name AS service_name, b.professional_id, p.name AS professional_name,
                    b.client_name, b.client_phone, b.starts, b.ends, b.blocked_until, b.status, b.cancelled_at,
-                   b.cancelled_by
+                   b.cancelled_by, b.reminded_at
             FROM booking b JOIN service s ON s.id = b.service_id JOIN professional p ON p.id = b.professional_id""";
 }
