@@ -29,6 +29,17 @@ It's plain HTML, CSS and JS served by Spring (`src/main/resources/static`), no b
   <img src="docs/booking-dark.png" alt="The booking page in dark mode" width="420">
 </p>
 
+## When the day is full
+
+A full day isn't a dead end. It still opens, says there are no times left, and offers the waiting list: a name and a phone, and the client gets their place in the line back. Asking twice with the same phone keeps the first place.
+
+Nothing gets sent by the system, on purpose: a barbershop doesn't need an email server, it needs someone to call. The staff sees who's waiting under that day's agenda, first in line first, with the service and the person they asked for, a phone to tap and a WhatsApp link. When someone cancels, they call the first one.
+
+<p>
+  <img src="docs/waiting.png" alt="A full Saturday: no times left, and the waiting list form that answered 'You're first in line'" width="520">
+  <img src="docs/waiting-staff.png" alt="Under the agenda, two people waiting for the day, each with a phone, a WhatsApp link and a remove button" width="420">
+</p>
+
 ## Changing or cancelling
 
 The confirmation shows a link the client keeps. It opens a page with the booking, a button to pick another time and one to cancel, up to 3 hours before the time (`booking.cancel-until`). After that the page says to call instead, and the staff can still cancel from their side at any time.
@@ -152,6 +163,7 @@ Client side:
 | `POST /api/bookings/by-token/{token}/cancel` | cancels it, 409 if it's too late or already cancelled |
 | `POST /api/bookings/by-token/{token}/move` | `{"start": "..."}`, same person and service; 409 if that time isn't free or it's too late |
 | `GET /api/bookings/by-token/{token}/calendar.ics` | the booking for a calendar app, with two reminders |
+| `POST /api/waiting` | `{"serviceId":1,"date":"2026-11-14","clientName":"Lucas","clientPhone":"..."}`, answers `{"place": 1}` |
 
 A refused booking answers 409 with the reasons:
 
@@ -162,7 +174,7 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
