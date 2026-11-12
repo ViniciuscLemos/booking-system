@@ -8,6 +8,10 @@ updates:
     groups:
       all:
         patterns: ['*']
+    # a new major (Spring Boot 4) changes the security API: that's a planned upgrade, not a bump
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
