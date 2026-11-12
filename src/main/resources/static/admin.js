@@ -137,6 +137,30 @@ async function loadDay(date) {
     return;
   }
   render(bookings, day);
+  loadWaiting(date);
+}
+
+// who's on the waiting list for the day, first in line first, with a tap to call or message
+async function loadWaiting(date) {
+  let people = [];
+  try { people = await api(`/api/admin/waiting?date=${date}`); } catch { /* the agenda is what matters */ }
+  if (date !== state.date) return;
+  $('waiting').hidden = !people.length;
+  $('waiting-people').replaceChildren(...people.map((w) => {
+    const digits = w.clientPhone.replace(/\D/g, '');
+    const remove = el('button', { type: 'button', class: 'link small', 'aria-label': `Take ${w.clientName} off the list` }, 'Remove');
+    remove.addEventListener('click', async () => {
+      await api(`/api/admin/waiting/${w.id}`, { method: 'DELETE' });
+      loadWaiting(date);
+    });
+    return el('li', {},
+      el('span', { class: 'who-what' }, el('strong', {}, w.clientName), ' ',
+        el('span', {}, `${w.service}${w.professional ? ` with ${w.professional}` : ''}`)),
+      el('span', { class: 'side' },
+        el('a', { class: 'phone', href: `tel:${w.clientPhone}` }, prettyPhone(w.clientPhone)),
+        el('a', { class: 'link small', href: `https://wa.me/${digits.length <= 11 ? `55${digits}` : digits}`, target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+        remove));
+  }));
 }
 
 // minutes from midnight of the agenda's day; time off that started before or ends after it is cut
