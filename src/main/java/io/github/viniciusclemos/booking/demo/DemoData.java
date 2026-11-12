@@ -140,6 +140,15 @@ public class DemoData implements ApplicationRunner {
                         .update();
             }
         }
+
+        // two people waiting for today, so the staff side shows what the list looks like
+        if (db.sql("SELECT count(*) FROM waiting").query(Integer.class).single() == 0) {
+            LocalDate day = today.getDayOfWeek() == DayOfWeek.SUNDAY ? today.plusDays(1) : today;
+            db.sql("""
+                            INSERT INTO waiting (service_id, professional_id, day, client_name, client_phone)
+                            VALUES (?, NULL, ?, 'Marcos Vieira', '11971234567'), (?, ?, ?, 'Paulo Nunes', '11962345678')""")
+                    .params(offers.get(0).id(), day, offers.get(0).id(), barbers.get(0), day).update();
+        }
     }
 
     private void hours(int day, String starts, String ends) {
