@@ -51,8 +51,9 @@ public class SecurityConfig {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                         // clients book and cancel without logging in (the cancel link carries its own
                         // secret), so there's no session to steal there;
-                        // the login itself has no session yet either
-                        .ignoringRequestMatchers("/api/bookings", "/api/bookings/by-token/**", "/api/auth/login"))
+                        // the login itself has no session yet either, and joining the waiting list
+                        // is the same as booking
+                        .ignoringRequestMatchers("/api/bookings", "/api/bookings/by-token/**", "/api/waiting", "/api/auth/login"))
                 .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 // a page that calls the API wants a 401, not a redirect to a login form
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))

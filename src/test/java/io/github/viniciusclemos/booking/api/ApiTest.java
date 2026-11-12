@@ -425,6 +425,39 @@ class ApiTest {
     }
 
     @Test
+    void aFullDayHasAWaitingListTheStaffSees() throws Exception {
+        String join = """
+                {"serviceId":%d,"date":"%s","clientName":"%s","clientPhone":"%s"}""";
+        send(post("/api/waiting"), join.formatted(haircut, "2026-11-03", "Bruno", "(11) 97777-1111"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.place").value(1));
+        send(post("/api/waiting"), join.formatted(haircut, "2026-11-03", "Carla", "(11) 96666-2222"))
+                .andExpect(jsonPath("$.place").value(2));
+        // asking again keeps the first place instead of going to the end of the line
+        send(post("/api/waiting"), join.formatted(haircut, "2026-11-03", "Bruno", "(11) 97777-1111"))
+                .andExpect(jsonPath("$.place").value(1));
+        // a past day, a day too far ahead, a bad phone or a service that doesn't exist
+        send(post("/api/waiting"), join.formatted(haircut, "2026-10-01", "Dani", "(11) 95555-3333")).andExpect(status().isBadRequest());
+        send(post("/api/waiting"), join.formatted(haircut, "2027-06-01", "Dani", "(11) 95555-3333")).andExpect(status().isBadRequest());
+        send(post("/api/waiting"), join.formatted(haircut, "2026-11-03", "Dani", "call me")).andExpect(status().isBadRequest());
+        send(post("/api/waiting"), join.formatted(99, "2026-11-03", "Dani", "(11) 95555-3333")).andExpect(status().isNotFound());
+
+        // the list is for the staff only
+        mvc.perform(get("/api/admin/waiting").param("date", "2026-11-03")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/waiting").param("date", "2026-11-03").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].clientName").value("Bruno"))
+                .andExpect(jsonPath("$[0].service").value("Haircut"))
+                .andExpect(jsonPath("$[1].clientPhone").value("(11) 96666-2222"));
+        long first = ((Number) com.jayway.jsonpath.JsonPath.read(mvc.perform(get("/api/admin/waiting").param("date", "2026-11-03")
+                .with(user("owner@northside.test"))).andReturn().getResponse().getContentAsString(), "$[0].id")).longValue();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/admin/waiting/" + first)
+                .with(user("owner@northside.test")).with(csrf())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/admin/waiting").param("date", "2026-11-03").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
     void theBookingAsACalendarFile() throws Exception {
         String token = token(book("2026-11-03T10:00"));
         String ics = mvc.perform(get("/api/bookings/by-token/" + token + "/calendar.ics"))
