@@ -300,11 +300,38 @@ function bookingRow(b) {
       }
       await loadDay(state.date);
     });
-    side.append(cancel);
+    // the reminder only makes sense before the time
+    const remind = `${b.starts}` > state.business.now ? remindLink(b, phone) : null;
+    side.append(el('span', { class: 'row-actions' }, remind, cancel));
   }
   return el('li', { class: isCancelled ? 'booking-row is-cancelled' : 'booking-row' },
     el('span', { class: 'when' }, hhmm(b.starts.slice(11)), el('small', {}, hhmm(b.ends.slice(11)))),
     who, side);
+}
+
+// WhatsApp opens with the reminder already written; the agenda marks it as sent, so nobody
+// at the desk sends it twice. Nothing goes out by itself: the staff presses send.
+function reminderText(b) {
+  const day = b.starts.slice(0, 10);
+  const when = day === state.today ? 'today' : day === shift(state.today, 1) ? 'tomorrow' : `on ${longDate(day)}`;
+  return `Hi ${b.clientName.split(' ')[0]}! A reminder from ${state.business.name}: ${b.serviceName} with ${b.professionalName} ${when} at ${hhmm(b.starts.slice(11))}, ${state.business.address}. If you can't make it, just reply here.`;
+}
+
+function remindLink(b, phone) {
+  const digits = phone.replace(/\D/g, '');
+  const to = digits.length <= 11 ? `55${digits}` : digits;
+  const link = el('a', {
+    class: b.remindedAt ? 'link small reminded' : 'link small',
+    href: `https://wa.me/${to}?text=${encodeURIComponent(reminderText(b))}`,
+    target: '_blank', rel: 'noopener',
+    title: b.remindedAt ? `Reminder sent at ${hhmm(b.remindedAt.slice(11))}` : 'Opens WhatsApp with the reminder written',
+  }, b.remindedAt ? `Reminded ${hhmm(b.remindedAt.slice(11))}` : 'Remind');
+  link.addEventListener('click', () => {
+    api(`/api/admin/bookings/${b.id}/reminded`, { method: 'POST' })
+      .then(() => { link.textContent = 'Reminded'; link.classList.add('reminded'); })
+      .catch(() => {});
+  });
+  return link;
 }
 
 $('prev').addEventListener('click', () => loadDay(shift(state.date, -1)));

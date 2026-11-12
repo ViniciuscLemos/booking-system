@@ -396,3 +396,6 @@ button.secondary:hover { background: var(--ink); color: var(--paper); }
 .waiting-list ol { margin: 0; padding-left: 1.4em; }
 .waiting-list li { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .waiting-list .side { display: flex; gap: 14px; align-items: baseline; }
+
+.link.small.reminded { color: var(--green); text-decoration-style: dotted; }
+.agenda .row-actions { display: flex; gap: 14px; align-items: baseline; }
