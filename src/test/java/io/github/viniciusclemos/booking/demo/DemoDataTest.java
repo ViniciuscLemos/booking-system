@@ -22,6 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(TestDatabase.class)
 class DemoDataTest {
 
+    // the tests share one database, and the demo's staff login has the same email as the owner
+    // other tests set up: leave it empty for them, whatever order the tests run in
+    @org.junit.jupiter.api.AfterAll
+    static void leaveTheDatabaseEmpty(@Autowired JdbcClient db) {
+        db.sql("TRUNCATE staff, booking, waiting, service, working_hours, date_override, time_off, professional, "
+                + "professional_service, professional_hours RESTART IDENTITY CASCADE").update();
+    }
+
     @Autowired MockMvc mvc;
     @Autowired JdbcClient db;
     @Autowired DemoData demo;
