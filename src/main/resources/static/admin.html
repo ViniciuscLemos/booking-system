@@ -47,6 +47,7 @@
 
   <nav class="wrap tabs" id="tabs" aria-label="Staff sections" hidden>
     <a href="#agenda" data-view="agenda">Agenda</a>
+    <a href="#month" data-view="month">The month</a>
     <a href="#services" data-view="services">Services</a>
     <a href="#hours" data-view="hours">Opening hours</a>
     <a href="#days" data-view="days">Days off</a>
@@ -96,6 +97,25 @@
         <span class="saved" id="hours-saved" hidden>Saved.</span>
       </div>
     </form>
+  </main>
+
+  <main class="wrap" id="month-view" hidden>
+    <div class="month-nav">
+      <button type="button" class="arrow" id="month-prev" aria-label="Previous month">‹</button>
+      <h2 id="month-title"></h2>
+      <button type="button" class="arrow" id="month-next" aria-label="Next month">›</button>
+    </div>
+    <p class="month-story" id="month-story"></p>
+    <dl class="month-figures" id="month-figures"></dl>
+    <div class="month-split">
+      <section aria-labelledby="by-person"><h3 id="by-person">By person</h3><ol class="lines" id="month-people"></ol></section>
+      <section aria-labelledby="by-service"><h3 id="by-service">By service</h3><ol class="lines" id="month-services"></ol></section>
+    </div>
+    <div class="month-split">
+      <section aria-labelledby="by-weekday"><h3 id="by-weekday">Busiest days</h3><ol class="columns" id="month-weekdays"></ol></section>
+      <section aria-labelledby="by-hour"><h3 id="by-hour">Busiest hours</h3><ol class="columns" id="month-hours"></ol></section>
+    </div>
+    <p class="muted note">Money counts what happened: confirmed, the time passed, the client came, at the price it was booked for.</p>
   </main>
 
   <main class="wrap" id="days-view" hidden>

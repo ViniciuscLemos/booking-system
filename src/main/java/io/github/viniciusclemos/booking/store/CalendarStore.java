@@ -155,6 +155,12 @@ public class CalendarStore {
                 .params(starts, ends, blockedUntil, id).update() == 1;
     }
 
+    /** Marks (or unmarks) a confirmed booking whose time has passed as a no-show. */
+    public boolean markNoShow(long id, boolean noShow, LocalDateTime now) {
+        return db.sql("UPDATE booking SET no_show = ? WHERE id = ? AND status = 'CONFIRMED' AND starts < ?")
+                .params(noShow, id, now).update() == 1;
+    }
+
     /** Marks the reminder as sent; false when the booking isn't there or isn't confirmed anymore. */
     public boolean markReminded(long id, LocalDateTime at) {
         return db.sql("UPDATE booking SET reminded_at = ? WHERE id = ? AND status = 'CONFIRMED'").params(at, id).update() == 1;
@@ -216,6 +222,6 @@ public class CalendarStore {
     private static final String BOOKING_SELECT = """
             SELECT b.id, b.service_id, s.name AS service_name, b.professional_id, p.name AS professional_name,
                    b.client_name, b.client_phone, b.starts, b.ends, b.blocked_until, b.status, b.cancelled_at,
-                   b.cancelled_by, b.reminded_at
+                   b.cancelled_by, b.reminded_at, b.no_show
             FROM booking b JOIN service s ON s.id = b.service_id JOIN professional p ON p.id = b.professional_id""";
 }

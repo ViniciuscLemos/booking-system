@@ -83,6 +83,77 @@ public class DemoData implements ApplicationRunner {
                     .update();
         }
         topUp();
+        history();
+    }
+
+    /**
+     * The last two months, once, so "The month" has something to show: bookings that happened,
+     * a few no-shows and a few cancelled by the client, the way a real place's past looks.
+     * Worked out in memory and written in one INSERT: the demo database takes one connection
+     * per query, and a few thousand of them in a row is more than it likes.
+     */
+    private void history() {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate from = today.minusMonths(2).withDayOfMonth(1);
+        // a demo database that already has its first weeks (from earlier runs) keeps them
+        if (db.sql("SELECT count(*) FROM booking WHERE starts < ?").param(from.plusMonths(1).atStartOfDay()).query(Integer.class).single() > 0) {
+            return;
+        }
+        List<Long> barbers = db.sql("SELECT id FROM professional WHERE active ORDER BY id").query(Long.class).list();
+        List<Offer> offers = db.sql("SELECT id, duration_min, buffer_min FROM service WHERE active ORDER BY id")
+                .query(Offer.class).list();
+        if (offers.isEmpty() || barbers.isEmpty()) return;
+        // who does what and who works when, read once
+        java.util.Map<Long, java.util.Set<Long>> does = new java.util.HashMap<>();
+        db.sql("SELECT professional_id, service_id FROM professional_service").query(rs -> {
+            does.computeIfAbsent(rs.getLong(1), k -> new java.util.HashSet<>()).add(rs.getLong(2));
+        });
+        record Shift(long who, int day, java.time.LocalTime starts, java.time.LocalTime ends) {
+        }
+        List<Shift> shifts = db.sql("SELECT professional_id, day_of_week, starts, ends FROM professional_hours")
+                .query((rs, n) -> new Shift(rs.getLong(1), rs.getInt(2), rs.getTime(3).toLocalTime(), rs.getTime(4).toLocalTime()))
+                .list();
+
+        java.util.Map<Long, List<LocalDateTime[]>> taken = new java.util.HashMap<>();
+        List<Object> params = new java.util.ArrayList<>();
+        int rows = 0;
+        for (LocalDate date = from; date.isBefore(today); date = date.plusDays(1)) {
+            if (date.getDayOfWeek() == DayOfWeek.SUNDAY) continue;
+            boolean saturday = date.getDayOfWeek() == DayOfWeek.SATURDAY;
+            int lastHour = saturday ? 13 : 18;
+            // Fridays and Saturdays busier, like a barbershop
+            int tries = (saturday || date.getDayOfWeek() == DayOfWeek.FRIDAY ? 7 : 4) * barbers.size();
+            for (int i = 0; i < tries; i++) {
+                LocalDateTime start = date.atTime(9 + random.nextInt(lastHour - 9), random.nextBoolean() ? 0 : 30);
+                Offer offer = offers.get(random.nextInt(offers.size()));
+                LocalDateTime end = start.plusMinutes(offer.durationMin());
+                LocalDateTime blocked = end.plusMinutes(offer.bufferMin());
+                if (start.getHour() < 12 && end.isAfter(date.atTime(12, 0))) continue;
+                if (start.getHour() == 12 || end.isAfter(date.atTime(lastHour + 1, 0))) continue;
+                long barber = barbers.get(random.nextInt(barbers.size()));
+                if (does.containsKey(barber) && !does.get(barber).contains(offer.id())) continue;
+                int dow = date.getDayOfWeek().getValue();
+                List<Shift> own = shifts.stream().filter(s -> s.who() == barber).toList();
+                if (!own.isEmpty() && own.stream().noneMatch(s -> s.day() == dow && !s.starts().isAfter(start.toLocalTime())
+                        && !s.ends().isBefore(end.toLocalTime()))) continue;
+                List<LocalDateTime[]> mine = taken.computeIfAbsent(barber, k -> new java.util.ArrayList<>());
+                if (mine.stream().anyMatch(x -> start.isBefore(x[1]) && x[0].isBefore(blocked))) continue;
+                int roll = random.nextInt(100);
+                boolean cancelled = roll < 8;
+                mine.add(new LocalDateTime[]{start, blocked});
+                params.addAll(java.util.Arrays.asList(offer.id(), barber, NAMES[random.nextInt(NAMES.length)],
+                        "119" + (10000000 + random.nextInt(89999999)), start, end, blocked,
+                        cancelled ? "CANCELLED" : "CONFIRMED", cancelled ? "CLIENT" : null,
+                        cancelled ? start.minusDays(1) : null, roll >= 8 && roll < 12));
+                rows++;
+            }
+        }
+        if (rows == 0) return;
+        String values = String.join(", ", java.util.Collections.nCopies(rows,
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?::text, ?::timestamp, ?)"));
+        db.sql("INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends, blocked_until, "
+                        + "status, cancelled_by, cancelled_at, no_show) VALUES " + values)
+                .params(params).update();
     }
 
     private record Offer(long id, int durationMin, int bufferMin) {

@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 public record BookingRow(long id, long serviceId, String serviceName, long professionalId, String professionalName,
                          String clientName, String clientPhone,
                          LocalDateTime starts, LocalDateTime ends, LocalDateTime blockedUntil, String status,
-                         LocalDateTime cancelledAt, String cancelledBy, LocalDateTime remindedAt) {
+                         LocalDateTime cancelledAt, String cancelledBy, LocalDateTime remindedAt, boolean noShow) {
 
     public boolean confirmed() {
         return "CONFIRMED".equals(status);

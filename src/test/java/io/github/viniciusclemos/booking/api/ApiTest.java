@@ -425,6 +425,43 @@ class ApiTest {
     }
 
     @Test
+    void theMonthInNumbersCountsWhatHappenedAtThePriceItWasBooked() throws Exception {
+        // October, before "now" (Nov 2): bookings that already happened, put straight in the table
+        String insert = """
+                INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends, blocked_until, status, cancelled_by)
+                VALUES (1, 1, ?, '11988887777', ?::timestamp, ?::timestamp + interval '30 minutes', ?::timestamp + interval '40 minutes', ?, ?)""";
+        for (String[] b : new String[][]{{"Ana", "2026-10-26 10:00", "CONFIRMED", null}, {"Bruno", "2026-10-27 14:00", "CONFIRMED", null},
+                {"Carla", "2026-10-27 15:00", "CONFIRMED", null}, {"Dani", "2026-10-28 09:00", "CANCELLED", "CLIENT"}}) {
+            db.sql(insert).params(b[0], b[1], b[1], b[1], b[2], b[3]).update();
+        }
+        book("2026-11-03T10:00").andExpect(status().isCreated());
+        // Carla didn't come; a booking still to come can't be marked
+        send(post("/api/admin/bookings/3/no-show"), "{\"noShow\":true}").andExpect(status().isNoContent());
+        send(post("/api/admin/bookings/5/no-show"), "{\"noShow\":true}").andExpect(status().isNotFound());
+        // a price going up later doesn't change what October made
+        send(put("/api/admin/services/1"), """
+                {"name":"Haircut","durationMin":30,"bufferMin":10,"priceCents":6000,"active":true}""").andExpect(status().isOk());
+
+        mvc.perform(get("/api/admin/report").param("month", "2026-10").with(user("owner@northside.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totals.done").value(2))
+                .andExpect(jsonPath("$.totals.noShows").value(1))
+                .andExpect(jsonPath("$.totals.cancelledByClient").value(1))
+                .andExpect(jsonPath("$.totals.earnedCents").value(9000))
+                .andExpect(jsonPath("$.people[0].name").value("Rui"))
+                .andExpect(jsonPath("$.services[0].done").value(2))
+                .andExpect(jsonPath("$.weekdays", hasSize(7)))
+                .andExpect(jsonPath("$.weekdays[1].done").value(1))
+                .andExpect(jsonPath("$.hours", hasSize(15)));
+        mvc.perform(get("/api/admin/report").param("month", "2026-11").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$.totals.coming").value(1))
+                .andExpect(jsonPath("$.totals.done").value(0))
+                .andExpect(jsonPath("$.previous.earnedCents").value(9000));
+        mvc.perform(get("/api/admin/report").param("month", "october").with(user("owner@northside.test")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void theStaffMarksTheReminderAndMovingClearsIt() throws Exception {
         String token = token(book("2026-11-03T10:00"));
         send(post("/api/admin/bookings/1/reminded"), "").andExpect(status().isNoContent());

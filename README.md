@@ -110,6 +110,16 @@ I went with a session instead of a JWT because the page and the API are on the s
 - The service and person pickers are radio groups: Tab gets in, the arrow keys move between options.
 - Scrolling between steps doesn't glide when the system asks for less motion.
 
+## The month in numbers
+
+**The month** tab is for the owner: a few sentences (*"166 clients came. R$ 70 more than the month before. 10 didn't show up. Fridays were the busiest."*), then what it made, who came, who's still booked, the no-shows and the cancellations, split by person, by service, by weekday and by hour.
+
+Money only counts what happened: confirmed, the time already passed, and the client came. A booking keeps the price it was made at (a trigger copies it from the service on insert), so raising the price of a haircut in December doesn't rewrite October.
+
+No-shows are marked on the agenda: once a booking's time has passed, **Mark as no-show** replaces Remind. The time was taken, so the booking stays confirmed; it just doesn't count as money.
+
+<img src="docs/month.png" alt="October 2026: 166 clients, R$ 8.035, 10 no-shows, 11 cancelled by clients, bars by person and by service, and columns by weekday and hour" width="620">
+
 ## The rules
 
 `BookingRules.check` takes a calendar, a service and a start time, and returns every reason the time is refused (empty list = it can be booked):
@@ -180,7 +190,7 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), marking a reminder as sent (`POST /api/admin/bookings/{id}/reminded`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), marking a reminder as sent (`POST /api/admin/bookings/{id}/reminded`), a no-show (`POST /api/admin/bookings/{id}/no-show`), the month's report (`GET /api/admin/report?month=2026-10`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 

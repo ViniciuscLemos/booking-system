@@ -56,7 +56,7 @@ function prettyPhone(text) {
 
 // one view at a time; the tabs and the name only once logged in
 function show(view) {
-  for (const name of ['login', 'agenda', 'services', 'hours', 'days']) $(`${name}-view`).hidden = view !== name;
+  for (const name of ['login', 'agenda', 'month', 'services', 'hours', 'days']) $(`${name}-view`).hidden = view !== name;
   $('who').hidden = view === 'login';
   $('tabs').hidden = view === 'login';
   for (const tab of document.querySelectorAll('#tabs a')) {
@@ -72,6 +72,7 @@ $('tabs').addEventListener('click', (event) => {
   const view = tab.dataset.view;
   show(view);
   if (view === 'agenda') loadDay(state.date);
+  if (view === 'month') loadMonth(state.month || state.today.slice(0, 7));
   if (view === 'services') loadServices();
   if (view === 'hours') loadHours();
   if (view === 'days') loadDaysOff();
@@ -300,14 +301,106 @@ function bookingRow(b) {
       }
       await loadDay(state.date);
     });
-    // the reminder only makes sense before the time
-    const remind = `${b.starts}` > state.business.now ? remindLink(b, phone) : null;
-    side.append(el('span', { class: 'row-actions' }, remind, cancel));
+    // before the time: remind or cancel; after it: say whether they came
+    const upcoming = `${b.starts}` > state.business.now;
+    side.append(el('span', { class: 'row-actions' }, upcoming ? remindLink(b, phone) : noShowButton(b), upcoming ? cancel : null));
   }
   return el('li', { class: isCancelled ? 'booking-row is-cancelled' : 'booking-row' },
     el('span', { class: 'when' }, hhmm(b.starts.slice(11)), el('small', {}, hhmm(b.ends.slice(11)))),
     who, side);
 }
+
+// after the time: did they come? A no-show still took the time, it just didn't happen
+function noShowButton(b) {
+  const button = el('button', { type: 'button', class: b.noShow ? 'link small no-show is-on' : 'link small no-show', 'aria-pressed': String(b.noShow) },
+    b.noShow ? "Didn't come" : 'Mark as no-show');
+  button.addEventListener('click', async () => {
+    try {
+      await api(`/api/admin/bookings/${b.id}/no-show`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ noShow: !b.noShow }),
+      });
+    } catch (err) {
+      if (err.status === 401) return show('login');
+    }
+    loadDay(state.date);
+  });
+  return button;
+}
+
+// the month in numbers: a few sentences, the figures, and how it splits
+const money = (cents) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS_LONG = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
+
+function shiftMonth(month, by) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
+}
+
+function monthStory(r, title) {
+  const t = r.totals;
+  if (!t.done && !t.coming) return `Nothing booked in ${title}.`;
+  const story = [`${t.done} ${t.done === 1 ? 'client came' : 'clients came'}${t.coming ? `, and ${t.coming} more ${t.coming === 1 ? 'is' : 'are'} booked` : ''}.`];
+  // comparing money only makes sense once the month is over
+  if (r.previous.done && !t.coming) {
+    const diff = t.earnedCents - r.previous.earnedCents;
+    story.push(diff >= 0 ? `${money(diff)} more than the month before.` : `${money(-diff)} less than the month before.`);
+  }
+  if (t.noShows) story.push(`${t.noShows} didn't show up.`);
+  const busiest = r.weekdays.reduce((a, b) => (b.done > a.done ? b : a), r.weekdays[0]);
+  if (busiest.done) story.push(`${WEEKDAYS_LONG[busiest.value - 1]} were the busiest.`);
+  return story.join(' ');
+}
+
+async function loadMonth(month) {
+  state.month = month;
+  const title = new Date(`${month}-01T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+  $('month-title').textContent = title;
+  $('month-next').disabled = month >= state.today.slice(0, 7);
+  let r;
+  try {
+    r = await api(`/api/admin/report?month=${month}`);
+  } catch (err) {
+    if (err.status === 401) return show('login');
+    $('month-story').textContent = err.message;
+    return;
+  }
+  if (state.month !== month) return;
+  const t = r.totals;
+  $('month-story').textContent = monthStory(r, title);
+  $('month-figures').replaceChildren(...[
+    ['made', money(t.earnedCents)], ['came', t.done], ['still booked', t.coming], ['no-shows', t.noShows],
+    ['cancelled by clients', t.cancelledByClient], ['cancelled by you', t.cancelledByStaff],
+  ].map(([label, value]) => el('div', {}, el('dt', {}, label), el('dd', {}, String(value)))));
+
+  const lines = (id, rows) => {
+    const top = Math.max(1, ...rows.map((x) => x.earnedCents));
+    $(id).replaceChildren(...(rows.length ? rows.map((x) => {
+      const bar = el('span', { class: 'bar' });
+      bar.style.width = `${(100 * x.earnedCents) / top}%`;
+      return el('li', {}, el('span', {}, x.name), el('span', { class: 'figure' }, `${x.done} · ${money(x.earnedCents)}`),
+        el('span', { class: 'track', 'aria-hidden': 'true' }, bar));
+    }) : [el('li', { class: 'empty' }, 'Nobody yet')]));
+  };
+  lines('month-people', r.people);
+  lines('month-services', r.services);
+
+  const columns = (id, rows, label) => {
+    const top = Math.max(1, ...rows.map((x) => x.done));
+    $(id).replaceChildren(...rows.map((x) => {
+      const li = el('li', { title: `${label(x.value)}: ${x.done}` },
+        el('span', { class: 'col', 'aria-hidden': 'true' }), el('span', { class: 'col-label' }, label(x.value)),
+        el('span', { class: 'sr-only' }, `: ${x.done}`));
+      li.style.setProperty('--h', `${x.done ? Math.max(6, (100 * x.done) / top) : 2}%`);
+      return li;
+    }));
+  };
+  columns('month-weekdays', r.weekdays, (d) => SHORT_DAYS[d - 1]);
+  columns('month-hours', r.hours, (h) => `${h}h`);
+}
+
+$('month-prev').addEventListener('click', () => loadMonth(shiftMonth(state.month, -1)));
+$('month-next').addEventListener('click', () => loadMonth(shiftMonth(state.month, 1)));
 
 // WhatsApp opens with the reminder already written; the agenda marks it as sent, so nobody
 // at the desk sends it twice. Nothing goes out by itself: the staff presses send.
