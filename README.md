@@ -10,7 +10,12 @@ Building a form that saves a date is easy. The hard part is the rules: two clien
 
 ![The booking page: services with price and duration, two weeks of days with how many times are free, the times of the chosen day and the client's details](docs/booking-desktop.png)
 
-Work in progress. What works today: the rules, a REST API on PostgreSQL, the client's booking page and a staff page with login, and cancelling. More than one professional comes next.
+What's there today:
+
+- **For the client:** the booking page, a link to move or cancel it, the time in their phone's calendar, and a waiting list when the day is full.
+- **For the staff:** the day's agenda, a WhatsApp reminder a click away, no-shows, who each client is and how often they come, services and prices, opening hours, days off and holidays, and a team where each person has their own hours and services.
+- **For the owner:** the month in numbers, what it made and where it came from.
+- **Underneath:** the rules in plain Java, a REST API on PostgreSQL that refuses double bookings on its own, and about 60 tests.
 
 ## The booking page
 
@@ -245,5 +250,6 @@ The rules don't know about Spring or the database, which is why most of the test
 
 ## What's next
 
-- a reminder to the client by message the day before, with the link
+- the reminder going out on its own (WhatsApp's API) instead of a click on the staff's phone
+- a deposit paid online when booking, for places that lose money to no-shows
 - the client seeing their own bookings from the phone number, without an account (the staff side already looks people up this way)
