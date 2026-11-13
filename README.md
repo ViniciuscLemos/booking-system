@@ -120,6 +120,14 @@ No-shows are marked on the agenda: once a booking's time has passed, **Mark as n
 
 <img src="docs/month.png" alt="October 2026: 166 clients, R$ 8.035, 10 no-shows, 11 cancelled by clients, bars by person and by service, and columns by weekday and hour" width="620">
 
+## Who's this client?
+
+On the agenda, a client's name opens a line about them, found by their phone number: how many times they came and when they were last in, what they usually have, how much they've spent there, and how often they didn't show up or cancelled. *"Came 14 times, last on 11 Nov (Haircut and beard). Usually haircut and beard, since 1 Sept. R$ 705 so far."* A regular gets treated like one, and someone who skipped twice gets a red line on the side, so it's worth a call the day before.
+
+People type their phone in every shape, `(11) 98888-7777`, `11988887777`, `+55 11 98888-7777`, so the match is on the last 11 digits only. There are no client accounts for this to hang on: the phone is the one thing everyone gives the same way.
+
+<img src="docs/client.png" alt="The agenda of a day with two clients opened: one came 14 times since September and spent R$ 705, the other came 11 times, didn't show up once and cancelled once" width="620">
+
 ## The rules
 
 `BookingRules.check` takes a calendar, a service and a start time, and returns every reason the time is refused (empty list = it can be booked):
@@ -160,7 +168,7 @@ CONSTRAINT booking_no_overlap EXCLUDE USING gist (
 ) WHERE (status = 'CONFIRMED')
 ```
 
-Postgres refuses any confirmed booking whose time range overlaps another one *with the same person*, buffer included. Rui at 10:00 and Bia at 10:00 are fine; Rui twice at 10:00 isn't. Mixing `=` on a plain column with `&&` on a range in one constraint needs the `btree_gist` extension. The API turns that error into the same 409 the rules give. There's a test that fires 8 bookings for the same time at once: one gets in, seven get `CLASHES_WITH_BOOKING`, and the table ends up with one row. Cancelled bookings are left out of the constraint, so cancelling frees the time.
+Postgres refuses any confirmed booking whose time range overlaps another one *with the same person*, buffer included. Rui at 10:00 and Bia at 10:00 are fine; Rui twice at 10:00 isn't. Mixing `=` on a plain column with `&&` on a range in one constraint needs the `btree_gist` extension. The API turns that error into the same 409 the rules give. There's a test that fires 8 bookings for the same time at once: one gets in, seven get `CLASHES_WITH_BOOKING`, and the table ends up with one row. With enough of them at once, Postgres can also find two inserts waiting on each other's overlap check and stop one of them with a deadlock. That one simply tries again, and then finds the time taken like the others. Cancelled bookings are left out of the constraint, so cancelling frees the time.
 
 A booking also copies its end and buffer when it's saved, so making a service longer later doesn't move the appointments that already exist.
 
@@ -190,13 +198,13 @@ A refused booking answers 409 with the reasons:
 }
 ```
 
-Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), marking a reminder as sent (`POST /api/admin/bookings/{id}/reminded`), a no-show (`POST /api/admin/bookings/{id}/no-show`), the month's report (`GET /api/admin/report?month=2026-10`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
+Staff side, under `/api/admin` (needs the login): create and edit services, set the week's hours, special dates, time off, the day's bookings, the day's waiting list (`GET /api/admin/waiting?date=`, `DELETE /api/admin/waiting/{id}`), marking a reminder as sent (`POST /api/admin/bookings/{id}/reminded`), a no-show (`POST /api/admin/bookings/{id}/no-show`), the month's report (`GET /api/admin/report?month=2026-10`), one client's history (`GET /api/admin/clients?phone=11988887777`), and the team (who does which services, and each person's own week at `PUT /api/admin/professionals/{id}/hours`, where `{}` means the place's hours). Login is `POST /api/auth/login`, `POST /api/auth/logout` and `GET /api/auth/me`; a call without a session gets 401, a change without the CSRF token gets 403.
 
 `/availability/days` loads two weeks of hours, time off and bookings in a handful of queries and works out the days in memory, instead of one round of queries per day. The bookings are looked up by time window, with a partial index on `starts` for confirmed bookings only.
 
 ## Running it
 
-Java 21 and Maven. The tests start their own PostgreSQL (embedded, downloaded by Maven the first time), so there's nothing to install or Docker to run:
+Java 21, Spring Boot 4 and Maven. The tests start their own PostgreSQL (embedded, downloaded by Maven the first time), so there's nothing to install or Docker to run:
 
 ```bash
 mvn test
@@ -238,4 +246,4 @@ The rules don't know about Spring or the database, which is why most of the test
 ## What's next
 
 - a reminder to the client by message the day before, with the link
-- the client seeing their own bookings from the phone number, without an account
+- the client seeing their own bookings from the phone number, without an account (the staff side already looks people up this way)

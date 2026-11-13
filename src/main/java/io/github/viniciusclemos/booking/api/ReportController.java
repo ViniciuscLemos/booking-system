@@ -48,6 +48,47 @@ public class ReportController {
         return ResponseEntity.noContent().build();
     }
 
+    public record Client(int visits, int noShows, int cancelled, int coming, LocalDate firstVisit, LocalDate lastVisit,
+                         String lastService, String usualService, long spentCents) {
+    }
+
+    /**
+     * One client's past at this place, found by the phone (the one thing everyone types the
+     * same way, give or take the brackets and a +55): how many times they came, didn't come or
+     * cancelled, and what they usually have.
+     */
+    @GetMapping("/clients")
+    Client client(@RequestParam String phone) {
+        String digits = phone.replaceAll("\\D", "");
+        if (digits.length() < 8) throw new IllegalArgumentException("That doesn't look like a phone number");
+        var params = java.util.Map.<String, Object>of("phone", digits.substring(Math.max(0, digits.length() - 11)),
+                "now", scheduling.now());
+        String mine = "right(regexp_replace(b.client_phone, '\\D', '', 'g'), 11) = :phone";
+        String happened = "b.status = 'CONFIRMED' AND NOT b.no_show AND b.starts < :now";
+        return db.sql("""
+                        SELECT count(*) FILTER (WHERE %2$s) AS visits,
+                               count(*) FILTER (WHERE b.status = 'CONFIRMED' AND b.no_show) AS no_shows,
+                               count(*) FILTER (WHERE b.status = 'CANCELLED') AS cancelled,
+                               count(*) FILTER (WHERE b.status = 'CONFIRMED' AND b.starts >= :now) AS coming,
+                               min(b.starts) FILTER (WHERE %2$s) AS first_visit,
+                               max(b.starts) FILTER (WHERE %2$s) AS last_visit,
+                               (SELECT s.name FROM booking b JOIN service s ON s.id = b.service_id
+                                WHERE %1$s AND %2$s ORDER BY b.starts DESC LIMIT 1) AS last_service,
+                               (SELECT s.name FROM booking b JOIN service s ON s.id = b.service_id
+                                WHERE %1$s AND %2$s GROUP BY s.name ORDER BY count(*) DESC, max(b.starts) DESC LIMIT 1) AS usual_service,
+                               coalesce(sum(b.price_cents) FILTER (WHERE %2$s), 0) AS spent_cents
+                        FROM booking b WHERE %1$s""".formatted(mine, happened))
+                .params(params)
+                .query((rs, n) -> new Client(rs.getInt("visits"), rs.getInt("no_shows"), rs.getInt("cancelled"), rs.getInt("coming"),
+                        day(rs.getTimestamp("first_visit")), day(rs.getTimestamp("last_visit")),
+                        rs.getString("last_service"), rs.getString("usual_service"), rs.getLong("spent_cents")))
+                .single();
+    }
+
+    private static LocalDate day(java.sql.Timestamp t) {
+        return t == null ? null : t.toLocalDateTime().toLocalDate();
+    }
+
     public record Totals(int done, int coming, int noShows, int cancelledByClient, int cancelledByStaff, long earnedCents) {
     }
 

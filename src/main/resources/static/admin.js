@@ -278,7 +278,9 @@ function bookingRow(b) {
   const phone = b.clientPhone.replace(/[^\d+]/g, '');
   const isCancelled = b.status === 'CANCELLED';
   const with_ = team().length > 1 && !state.pro ? ` · with ${b.professionalName}` : '';
-  const who = el('span', { class: 'who-what' }, el('b', {}, b.clientName), el('span', {}, `${b.serviceName}${with_}`));
+  const name = el('button', { type: 'button', class: 'client-name', 'aria-expanded': 'false', title: "See this client's past here" }, b.clientName);
+  const who = el('span', { class: 'who-what' }, name, el('span', {}, `${b.serviceName}${with_}`));
+  name.addEventListener('click', () => clientHistory(name, who, b));
   if (isCancelled) {
     const by = b.cancelledBy === 'CLIENT' ? 'by the client' : 'by the staff';
     who.append(el('span', { class: 'cancelled-stamp' }, `Cancelled ${by} at ${hhmm(b.cancelledAt.slice(11))}`));
@@ -308,6 +310,44 @@ function bookingRow(b) {
   return el('li', { class: isCancelled ? 'booking-row is-cancelled' : 'booking-row' },
     el('span', { class: 'when' }, hhmm(b.starts.slice(11)), el('small', {}, hhmm(b.ends.slice(11)))),
     who, side);
+}
+
+// one click on a name: has this person been here before, and do they turn up?
+const visitDay = (d) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const times = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+function clientStory(c) {
+  if (!c.visits && !c.noShows && !c.cancelled) return 'First time here.';
+  const story = [];
+  if (c.visits) {
+    story.push(`Came ${c.visits === 1 ? 'once' : `${c.visits} times`}, last on ${visitDay(c.lastVisit)} (${c.lastService}).`);
+    if (c.visits > 1) story.push(`Usually ${c.usualService.toLowerCase()}, since ${visitDay(c.firstVisit)}. ${money(c.spentCents)} so far.`);
+  } else {
+    story.push("Hasn't come yet.");
+  }
+  const misses = [c.noShows && `didn't show up ${c.noShows === 1 ? 'once' : `${c.noShows} times`}`, c.cancelled && `cancelled ${times(c.cancelled, 'booking')}`].filter(Boolean);
+  if (misses.length) story.push(`${misses.join(', ').replace(/^./, (x) => x.toUpperCase())}.`);
+  return story.join(' ');
+}
+
+async function clientHistory(button, who, b) {
+  const open = who.querySelector('.client-history');
+  if (open) {
+    open.remove();
+    button.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const line = el('span', { class: 'client-history', role: 'status' }, 'Looking…');
+  who.append(line);
+  button.setAttribute('aria-expanded', 'true');
+  try {
+    const c = await api(`/api/admin/clients?phone=${encodeURIComponent(b.clientPhone)}`);
+    line.textContent = clientStory(c);
+    if (c.noShows >= 2) line.classList.add('is-warning');
+  } catch (err) {
+    if (err.status === 401) return show('login');
+    line.textContent = err.message;
+  }
 }
 
 // after the time: did they come? A no-show still took the time, it just didn't happen

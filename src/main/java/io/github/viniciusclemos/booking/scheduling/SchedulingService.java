@@ -11,6 +11,7 @@ import io.github.viniciusclemos.booking.store.ProfessionalStore.Professional;
 import io.github.viniciusclemos.booking.store.ServiceRow;
 import io.github.viniciusclemos.booking.store.ServiceStore;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -114,14 +115,22 @@ public class SchedulingService {
                 continue;
             }
             String token = CancelTokens.newToken();
-            try {
-                long id = calendars.insertBooking(serviceId, who.id(), clientName, clientPhone, start,
-                        wanted.appointment().end(), wanted.blocked().end(), CancelTokens.hash(token));
-                return new Booked(booking(id), token);
-            } catch (DataIntegrityViolationException e) {
-                // someone took the same time with this person between the check and the insert
-                if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains("booking_no_overlap")) throw e;
-                if (firstProblems == null) firstProblems = List.of(Violation.CLASHES_WITH_BOOKING);
+            // Many people asking for the same time at once can deadlock on the overlap check:
+            // Postgres stops one of them, and that one simply asks again (and then finds it taken).
+            for (int attempt = 1; ; attempt++) {
+                try {
+                    long id = calendars.insertBooking(serviceId, who.id(), clientName, clientPhone, start,
+                            wanted.appointment().end(), wanted.blocked().end(), CancelTokens.hash(token));
+                    return new Booked(booking(id), token);
+                } catch (PessimisticLockingFailureException e) {
+                    if (attempt < 3) continue;
+                    if (firstProblems == null) firstProblems = List.of(Violation.CLASHES_WITH_BOOKING);
+                } catch (DataIntegrityViolationException e) {
+                    // someone took the same time with this person between the check and the insert
+                    if (!String.valueOf(e.getMostSpecificCause().getMessage()).contains("booking_no_overlap")) throw e;
+                    if (firstProblems == null) firstProblems = List.of(Violation.CLASHES_WITH_BOOKING);
+                }
+                break;
             }
         }
         throw new BookingRefused(firstProblems != null ? firstProblems : List.of(Violation.CLASHES_WITH_BOOKING));

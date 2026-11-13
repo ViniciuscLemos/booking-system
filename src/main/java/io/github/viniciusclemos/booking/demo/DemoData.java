@@ -33,7 +33,16 @@ public class DemoData implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(DemoData.class);
 
     private static final String[] NAMES = {"Lucas Almeida", "Pedro Rocha", "Gabriel Costa", "Mateus Oliveira",
-            "Rafael Souza", "Thiago Martins", "Bruno Ferreira", "Felipe Lima", "Caio Ribeiro", "Diego Santos"};
+            "Rafael Souza", "Thiago Martins", "Bruno Ferreira", "Felipe Lima", "Caio Ribeiro", "Diego Santos",
+            "André Carvalho", "Gustavo Pereira", "Leonardo Gomes", "Rodrigo Barbosa", "Eduardo Araújo", "Marcelo Dias",
+            "Vinícius Teixeira", "Henrique Moreira", "Daniel Cardoso", "Fábio Mendes", "Ricardo Nogueira", "Samuel Pinto",
+            "Otávio Freitas", "Murilo Castro", "João Pedro Melo", "Arthur Campos", "Renato Duarte", "Igor Monteiro",
+            "Paulo Henrique Reis", "Fernando Batista", "Victor Hugo Lopes", "Sérgio Azevedo", "Alexandre Ramos", "Davi Correia"};
+
+    /** Each regular has one phone, the way real clients do, so their history adds up. */
+    private static String phoneOf(String name) {
+        return "119" + (10000000 + Math.floorMod(name.hashCode(), 89999999));
+    }
 
     private final JdbcClient db;
     private final StaffStore staff;
@@ -141,8 +150,8 @@ public class DemoData implements ApplicationRunner {
                 int roll = random.nextInt(100);
                 boolean cancelled = roll < 8;
                 mine.add(new LocalDateTime[]{start, blocked});
-                params.addAll(java.util.Arrays.asList(offer.id(), barber, NAMES[random.nextInt(NAMES.length)],
-                        "119" + (10000000 + random.nextInt(89999999)), start, end, blocked,
+                String client = NAMES[random.nextInt(NAMES.length)];
+                params.addAll(java.util.Arrays.asList(offer.id(), barber, client, phoneOf(client), start, end, blocked,
                         cancelled ? "CANCELLED" : "CONFIRMED", cancelled ? "CLIENT" : null,
                         cancelled ? start.minusDays(1) : null, roll >= 8 && roll < 12));
                 rows++;
@@ -199,6 +208,7 @@ public class DemoData implements ApplicationRunner {
                         .params(barber, barber, date.getDayOfWeek().getValue(), start.toLocalTime(), end.toLocalTime())
                         .query(Boolean.class).single();
                 if (!works) continue;
+                String client = NAMES[random.nextInt(NAMES.length)];
                 db.sql("""
                                 INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends,
                                                      blocked_until)
@@ -206,8 +216,7 @@ public class DemoData implements ApplicationRunner {
                                 WHERE NOT EXISTS (SELECT 1 FROM booking
                                                   WHERE status = 'CONFIRMED' AND professional_id = ?
                                                     AND tsrange(starts, blocked_until) && tsrange(?, ?))""")
-                        .params(offer.id(), barber, NAMES[random.nextInt(NAMES.length)],
-                                "119" + (10000000 + random.nextInt(89999999)), start, end, blocked, barber, start, blocked)
+                        .params(offer.id(), barber, client, phoneOf(client), start, end, blocked, barber, start, blocked)
                         .update();
             }
         }

@@ -8,7 +8,7 @@ import io.github.viniciusclemos.booking.store.CalendarStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -459,6 +459,38 @@ class ApiTest {
                 .andExpect(jsonPath("$.previous.earnedCents").value(9000));
         mvc.perform(get("/api/admin/report").param("month", "october").with(user("owner@northside.test")))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void aClientsHistoryIsFoundByThePhoneHoweverItWasTyped() throws Exception {
+        String insert = """
+                INSERT INTO booking (service_id, professional_id, client_name, client_phone, starts, ends, blocked_until, status, cancelled_by, no_show)
+                VALUES (1, 1, 'Ana', ?, ?::timestamp, ?::timestamp + interval '30 minutes', ?::timestamp + interval '40 minutes', ?, ?, ?)""";
+        for (Object[] b : new Object[][]{{"11988887777", "2026-09-14 10:00", "CONFIRMED", null, false},
+                {"+55 11 98888-7777", "2026-10-12 10:00", "CONFIRMED", null, false},
+                {"(11) 98888-7777", "2026-10-26 10:00", "CONFIRMED", null, true},
+                {"11988887777", "2026-10-28 10:00", "CANCELLED", "CLIENT", false},
+                {"11911112222", "2026-10-29 10:00", "CONFIRMED", null, false}}) {
+            db.sql(insert).params(b[0], b[1], b[1], b[1], b[2], b[3], b[4]).update();
+        }
+        book("2026-11-03T10:00").andExpect(status().isCreated());
+
+        mvc.perform(get("/api/admin/clients").param("phone", "(11) 98888-7777").with(user("owner@northside.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visits").value(2))
+                .andExpect(jsonPath("$.noShows").value(1))
+                .andExpect(jsonPath("$.cancelled").value(1))
+                .andExpect(jsonPath("$.coming").value(1))
+                .andExpect(jsonPath("$.firstVisit").value("2026-09-14"))
+                .andExpect(jsonPath("$.lastVisit").value("2026-10-12"))
+                .andExpect(jsonPath("$.usualService").value("Haircut"))
+                .andExpect(jsonPath("$.spentCents").value(9000));
+        mvc.perform(get("/api/admin/clients").param("phone", "11 97777-0000").with(user("owner@northside.test")))
+                .andExpect(jsonPath("$.visits").value(0))
+                .andExpect(jsonPath("$.lastVisit").isEmpty());
+        mvc.perform(get("/api/admin/clients").param("phone", "123").with(user("owner@northside.test")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/admin/clients").param("phone", "11988887777")).andExpect(status().isUnauthorized());
     }
 
     @Test
